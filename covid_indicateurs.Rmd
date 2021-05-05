@@ -12,13 +12,18 @@ output:
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 knitr::opts_knit$set(global.par = TRUE)
-
 ```
 
 
 ```{r}
 today <- Sys.Date() # today's date
 ```
+
+```{r}
+# Whether to generate a gif
+doGif <- FALSE
+```
+
 
 Mise à jour du `r today`.   
 Source des données : <https://www.data.gouv.fr/fr/datasets/synthese-des-indicateurs-de-suivi-de-lepidemie-covid-19/>
@@ -178,22 +183,25 @@ Mise à jour : ", today, " | ", "@flodebarre"), cex = 0.75, line = 2)
 ```
 
 ```{r}
-
-for(iend in 1:nrow(dat.France)){
-  png(filename = paste0("pics/hosp_", sprintf("%04d", iend), ".png"), width = 700, height = 700, pointsize = 20)
-  plotHosp(iend)
-  dev.off()
+if(doGif){
+  for(iend in 1:nrow(dat.France)){
+    png(filename = paste0("pics/hosp_", sprintf("%04d", iend), ".png"), width = 700, height = 700, pointsize = 20)
+    plotHosp(iend)
+    dev.off()
+  }
+  
+  # Convert into gif
+  system("convert -quality 100% -delay 0.1 -loop 0 pics/hosp*.png pics/animationHosp.gif")
+  
+  # Remove temporary files
+  system("rm pics/hosp*.png")
 }
 
-# Convert into gif
-system("convert -quality 100% -delay 0.1 -loop 0 pics/hosp*.png pics/animationHosp.gif")
-
-# Remove temporary files
-system("rm pics/hosp*.png")
-
 # Just re-do the last one
-plotHosp()
-
+iend <- nrow(dat.France)
+png(filename = paste0("pics/hosp_", sprintf("%04d", iend), ".png"), width = 700, height = 700, pointsize = 20)
+plotHosp(iend)
+dev.off()
 ```
 
 # Rea / soins intensifs
@@ -264,21 +272,25 @@ Mise à jour : ", today, " | ", "@flodebarre"), cex = 0.75, line = 2)
 ```
 
 ```{r}
+if(doGif){
+  for(iend in 1:nrow(dat.France)){
+    png(filename = paste0("pics/rea_", sprintf("%04d", iend), ".png"), width = 700, height = 700, pointsize = 20)
+    plotRea(iend)
+    dev.off()
+  }
 
-for(iend in 1:nrow(dat.France)){
-  png(filename = paste0("pics/rea_", sprintf("%04d", iend), ".png"), width = 700, height = 700, pointsize = 20)
-  plotRea(iend)
-  dev.off()
+  # Convert into gif
+  system("convert -quality 100% -delay 0.1 -loop 0 pics/rea*.png pics/animationRea.gif")
+  
+  # Remove temporary files
+  system("rm pics/rea*.png")
 }
 
-# Convert into gif
-system("convert -quality 100% -delay 0.1 -loop 0 pics/rea*.png pics/animationRea.gif")
-
-# Remove temporary files
-system("rm pics/rea*.png")
-
 # Just re-do the last one
-plotRea()
+iend <- nrow(dat.France)
+png(filename = paste0("pics/rea_", sprintf("%04d", iend), ".png"), width = 700, height = 700, pointsize = 20)
+plotRea(iend)
+dev.off()
 ```
 
 
