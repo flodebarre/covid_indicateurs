@@ -1,0 +1,303 @@
+---
+title: "Indicateurs"
+author: "FD"
+date: "`r format(Sys.Date(), '%d-%B-%Y')`"
+output: 
+  html_document:
+    code_folding: hide
+    toc: true
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(global.par = TRUE)
+
+```
+
+
+```{r}
+today <- Sys.Date() # today's date
+```
+
+Mise à jour du `r today`.   
+Source des données : <https://www.data.gouv.fr/fr/datasets/synthese-des-indicateurs-de-suivi-de-lepidemie-covid-19/>
+
+# Generic functions and parameters
+
+```{r}
+# Function to compute a sliding window 
+sliding.window <- function(v, winwdt = 7, pos = 4, na.rm = TRUE){
+  # v vector to be averaged/summed
+  # winwdt width of the window 
+  # pos position of the focal day in the window
+  # FUN function to apply
+  n <- length(v)
+  # Initialize output vector
+  out <- 0 * v + (-1)
+  out[1:(pos-1)] <- NA
+  out[(n + 1 - winwdt + pos) : n] <- NA
+  
+  for(i in pos : (n - winwdt + pos)){
+    out[i] <- mean(v[(i - pos + 1):(i + winwdt - pos)], na.rm = na.rm)
+  }
+  return(out[1:n])
+}
+```
+
+# Load and clean data
+
+```{r}
+URL <- "https://www.data.gouv.fr/fr/datasets/r/f335f9ea-86e3-4ffa-9684-93c009d5e617"
+dataFile <- paste0("data/FranceIndic_", today, ".csv") # name file with today's date
+download.file(URL, dataFile) # download file from repo
+dat.France <- read.csv(dataFile, sep = ",", stringsAsFactors = FALSE)
+```
+
+Compute sliding window average
+```{r}
+dat.France$incid_hosp_ave7 <- sliding.window(dat.France$incid_hosp)
+```
+
+Transform dates as decimals
+```{r}
+year <- substr(dat.France$date, 1, 4) # Extract year
+nbdays <- rep(365, nrow(dat.France)) # Number of days in the year
+nbdays[year == "2020"] <- 366 # 2020 is leap year
+
+dat.France$fracYear <- as.numeric(base::as.Date(dat.France$date) - base::as.Date(paste0(year, "-01-01"))) / nbdays # Fraction of the year
+```
+
+
+```{r}
+head(dat.France)
+```
+
+```{r}
+# Polar coordinates: r, theta
+# x = r * cos(theta)
+# y = r * sin(theta)
+
+frac2angle <- function(frac){
+  # Transform fraction of year into an angle in radian
+  - frac * 2 * pi + pi/2
+}
+polar2xy <- function(r, frac){
+  maxval <- max(abs(r), na.rm = TRUE) # Get max value to center the plot
+  theta <- frac2angle(frac) # angle value in radian, rotate clockwise
+  
+  # Polar to cartesian coordinates
+  x <- r * cos(theta)
+  y <- r * sin(theta)
+
+  list(x = x, y = y, maxval = maxval)  
+}
+
+col2020 <- "#0072B2"
+col2021 <- "#D55E00"
+cols <- rep(col2020, nrow(dat.France))
+cols[year == "2021"] <- col2021
+makeTransparent<-function(someColor, alpha = 100){
+  # Source : https://stackoverflow.com/questions/8047668/transparent-equivalent-of-given-color
+  newColor <- col2rgb(someColor)
+  apply(newColor, 2, function(curcoldata){rgb(red = curcoldata[1], 
+                                              green = curcoldata[2],
+                                              blue = curcoldata[3], 
+                                              alpha = alpha, 
+                                              maxColorValue = 255)})
+}
+colsTrp <- makeTransparent(cols, 70)
+colsTrp
+```
+
+
+# Hospitalisations 
+
+```{r}
+pxy <- polar2xy(dat.France$hosp, dat.France$fracYear)
+```
+
+```{r}
+
+plotHosp <- function(iend = nrow(dat.France)){
+  
+# Initalize plot
+par(pty="s")
+par(mar = rep(3.5, 4))
+rg <- 1.1 * c(- pxy$maxval, pxy$maxval)
+plot(0, 0, type = "n", xlim = rg, ylim = rg, 
+     xlab = "", ylab = "", 
+     asp = 1, 
+     axes = FALSE
+     )
+
+par(xpd = TRUE)
+
+graduations1 <- c(10000, 20000, 30000)
+graduations2 <- c(graduations1 - 5000, 35000)
+for(i in graduations1){
+  cxy <- polar2xy(i, seq(0, 1, length.out = 100))
+  lines(cxy$x, cxy$y, type = "l", col = "gray")
+}
+for(i in graduations2){
+  cxy <- polar2xy(i, seq(0, 1, length.out = 100))
+  lines(cxy$x, cxy$y, type = "l", col = "gray", lty = 3)
+}
+for(i in graduations1){
+text(x = 0, y = graduations1, labels = graduations1, col = "gray", cex = 0.7, adj = c(0.5, -0.2) )
+}
+
+months <- c("Jan", "Fev", "Mar", "Avr", "Mai", "Jun", "Jui", "Aou", "Sep", "Oct", "Nov", "Dec")
+
+
+thetas <- (1:12)/12 - 0.5/12
+r <- 40000
+for(i in seq_along(months)){
+  text(x = r * cos(frac2angle(thetas[i])), y = r * sin(frac2angle(thetas[i])), labels = months[i], srt = 90 - thetas[i]*360)
+}
+
+text(x = 0, y = r, adj = c(0, 0), labels = " 2021", col = col2021)
+text(x = 0, y = r, adj = c(1, 0), labels = "2020 ", col = col2020)
+
+title(main = "COVID-19, patients hospitalisés", line = 2.5)
+
+#text(x = 0, y = -r - 5000, labels = paste0("Source des données : ", URL, "
+#Mise à jour : ", today, " | ", "@flodebarre"), adj = c(0.5, 1), cex = 0.75)
+
+par(xpd = FALSE)
+
+
+points(pxy$x[1:iend], pxy$y[1:iend], col = cols, pch = 16, cex = 0.5)
+
+#legend(x = "topright", col = c(col2020, col2021), pch = 16, legend = c(expression("2020", col = "blue"), "2021"), cex = 0.8, pt.cex = 0.5, bty = "n")
+
+mtext(side = 1, text = paste0("Source des données : ", URL, "
+Mise à jour : ", today, " | ", "@flodebarre"), cex = 0.75, line = 2)
+
+}
+
+plotHosp()
+```
+
+```{r}
+
+for(iend in 1:nrow(dat.France)){
+  png(filename = paste0("pics/hosp_", sprintf("%04d", iend), ".png"), width = 700, height = 700, pointsize = 20)
+  plotHosp(iend)
+  dev.off()
+}
+
+```
+
+# Rea / soins intensifs
+
+
+# Hospitalisations 
+
+```{r}
+pxy <- polar2xy(dat.France$rea, dat.France$fracYear)
+```
+
+```{r}
+
+plotRea <- function(iend = nrow(dat.France)){
+  
+# Initalize plot
+par(pty="s")
+par(mar = rep(3.5, 4))
+rg <- 1.1 * c(- pxy$maxval, pxy$maxval)
+plot(0, 0, type = "n", xlim = rg, ylim = rg, 
+     xlab = "", ylab = "", 
+     asp = 1, 
+     axes = FALSE
+     )
+
+par(xpd = TRUE)
+
+graduations1 <- c(2000, 4000, 6000)
+graduations2 <- c(graduations1 - 1000, 7000)
+for(i in graduations1){
+  cxy <- polar2xy(i, seq(0, 1, length.out = 100))
+  lines(cxy$x, cxy$y, type = "l", col = "gray")
+}
+for(i in graduations2){
+  cxy <- polar2xy(i, seq(0, 1, length.out = 100))
+  lines(cxy$x, cxy$y, type = "l", col = "gray", lty = 3)
+}
+for(i in graduations1){
+text(x = 0, y = graduations1, labels = graduations1, col = "gray", cex = 0.7, adj = c(0.5, -0.2) )
+}
+
+months <- c("Jan", "Fev", "Mar", "Avr", "Mai", "Jun", "Jui", "Aou", "Sep", "Oct", "Nov", "Dec")
+
+
+thetas <- (1:12)/12 - 0.5/12
+r <- 8000
+for(i in seq_along(months)){
+  text(x = r * cos(frac2angle(thetas[i])), y = r * sin(frac2angle(thetas[i])), labels = months[i], srt = 90 - thetas[i]*360)
+}
+
+text(x = 0, y = r, adj = c(0, 0), labels = " 2021", col = col2021)
+text(x = 0, y = r, adj = c(1, 0), labels = "2020 ", col = col2020)
+
+title(main = "COVID-19, réanimation ou soins intensifs", line = 2.5)
+
+#text(x = 0, y = -r - 500, labels = paste0("Source des données : ", URL, "
+#Mise à jour : ", today, " | ", "@flodebarre"), adj = c(0.5, 1), cex = 0.75)
+
+par(xpd = FALSE)
+
+
+points(pxy$x[1:iend], pxy$y[1:iend], col = cols, pch = 16, cex = 0.5)
+
+#legend(x = "topright", col = c(col2020, col2021), pch = 16, legend = c(expression("2020", col = "blue"), "2021"), cex = 0.8, pt.cex = 0.5, bty = "n")
+
+mtext(side = 1, text = paste0("Source des données : ", URL, "
+Mise à jour : ", today, " | ", "@flodebarre"), cex = 0.75, line = 2)
+
+}
+
+plotRea()
+```
+
+```{r}
+
+for(iend in 1:nrow(dat.France)){
+  png(filename = paste0("pics/rea_", sprintf("%04d", iend), ".png"), width = 700, height = 700, pointsize = 20)
+  plotRea(iend)
+  dev.off()
+}
+
+system("convert -quality 100% -delay 0.1 -loop 0 pics/rea*.png pics/animationRea.gif")
+```
+
+
+```{r}
+plot(as.Date(dat.France$date), dat.France$incid_hosp)
+lines(as.Date(dat.France$date), dat.France$incid_hosp_ave7, col = "red")
+range(dat.France$incid_hosp, na.rm = TRUE)
+
+?transform
+
+head(dat.France)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
