@@ -69,7 +69,8 @@ dat.France$fracYear <- as.numeric(base::as.Date(dat.France$date) - base::as.Date
 ```
 
 
-```{r}
+```{r eval = FALSE}
+# Just for console evaluation
 head(dat.France)
 ```
 
@@ -107,7 +108,6 @@ makeTransparent<-function(someColor, alpha = 100){
                                               maxColorValue = 255)})
 }
 colsTrp <- makeTransparent(cols, 70)
-colsTrp
 ```
 
 
@@ -175,8 +175,6 @@ mtext(side = 1, text = paste0("Source des données : ", URL, "
 Mise à jour : ", today, " | ", "@flodebarre"), cex = 0.75, line = 2)
 
 }
-
-plotHosp()
 ```
 
 ```{r}
@@ -187,12 +185,18 @@ for(iend in 1:nrow(dat.France)){
   dev.off()
 }
 
+# Convert into gif
+system("convert -quality 100% -delay 0.1 -loop 0 pics/hosp*.png pics/animationHosp.gif")
+
+# Remove temporary files
+system("rm pics/hosp*.png")
+
+# Just re-do the last one
+plotHosp()
+
 ```
 
 # Rea / soins intensifs
-
-
-# Hospitalisations 
 
 ```{r}
 pxy <- polar2xy(dat.France$rea, dat.France$fracYear)
@@ -257,7 +261,6 @@ Mise à jour : ", today, " | ", "@flodebarre"), cex = 0.75, line = 2)
 
 }
 
-plotRea()
 ```
 
 ```{r}
@@ -268,36 +271,14 @@ for(iend in 1:nrow(dat.France)){
   dev.off()
 }
 
+# Convert into gif
 system("convert -quality 100% -delay 0.1 -loop 0 pics/rea*.png pics/animationRea.gif")
+
+# Remove temporary files
+system("rm pics/rea*.png")
+
+# Just re-do the last one
+plotRea()
 ```
 
 
-```{r}
-plot(as.Date(dat.France$date), dat.France$incid_hosp)
-lines(as.Date(dat.France$date), dat.France$incid_hosp_ave7, col = "red")
-range(dat.France$incid_hosp, na.rm = TRUE)
-
-?transform
-
-head(dat.France)
-```
-
-## R Markdown
-
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
-
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
-```
-
-## Including Plots
-
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
-```
-
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
