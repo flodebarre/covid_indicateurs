@@ -115,6 +115,48 @@ makeTransparent<-function(someColor, alpha = 100){
 colsTrp <- makeTransparent(cols, 70)
 ```
 
+```{r}
+addLegendPlot <- function(graduations1, graduations2, r, dfinal){
+  # graduations1 main graduations for number in concentric circles
+  # graduations2 sub graduations
+  # r radius of months / time legend
+  # dfinal fraction of the last day
+  
+  gmax <- max(c(graduations1, graduations2))
+  lwd.grad <- 1.2
+  
+  for(i in graduations1){
+    cxy <- polar2xy(i, seq(0, 1, length.out = 100))
+    lines(cxy$x, cxy$y, type = "l", col = "gray", lwd = lwd.grad)
+  }
+  for(i in graduations2){
+    cxy <- polar2xy(i, seq(0, 1, length.out = 100))
+    lines(cxy$x, cxy$y, type = "l", col = "gray", lty = 3, lwd = lwd.grad)
+  }
+  for(i in graduations1){
+  text(x = 0, y = graduations1, labels = graduations1, col = "gray", cex = 0.7, adj = c(0.5, -0.2) )
+  text(x = 0, y = -graduations1, labels = graduations1, col = "gray", cex = 0.7, adj = c(0.5, +1.2) )
+  }
+  
+  
+  # Add months legend
+  months <- c("Jan", "Fev", "Mar", "Avr", "Mai", "Jun", "Jui", "Aou", "Sep", "Oct", "Nov", "Dec")
+  thetas <- (1:12)/12 - 0.5/12 # Angles of the months
+  for(i in seq_along(months)){
+    text(x = r * cos(frac2angle(thetas[i])), y = r * sin(frac2angle(thetas[i])), labels = months[i], srt = 90 - thetas[i]*360, col = gray(0.5))
+  }
+  
+  # Add line to locate the current days
+  
+  # Line to show the date
+  lines(c(0, gmax * cos(dfinal)), c(0, gmax * sin(dfinal)))
+  # Text with the date
+  text(x = r * cos(dfinal), y = r * sin(dfinal), labels = dat.France[iend, "date"], srt = 90 - dat.France[iend, "fracYear"]*360, adj = c(0.2, 0.5), cex = 0.75, col = "black", )
+  
+  text(x = 0, y = r, adj = c(0, 0), labels = " 2021", col = col2021)
+  text(x = 0, y = r, adj = c(1, 0), labels = "2020 ", col = col2020)
+}
+```
 
 # Hospitalisations 
 
@@ -123,7 +165,6 @@ pxy <- polar2xy(dat.France$hosp, dat.France$fracYear)
 ```
 
 ```{r}
-
 plotHosp <- function(iend = nrow(dat.France)){
   
 # Initalize plot
@@ -140,29 +181,12 @@ par(xpd = TRUE)
 
 graduations1 <- c(10000, 20000, 30000)
 graduations2 <- c(graduations1 - 5000, 35000)
-for(i in graduations1){
-  cxy <- polar2xy(i, seq(0, 1, length.out = 100))
-  lines(cxy$x, cxy$y, type = "l", col = "gray")
-}
-for(i in graduations2){
-  cxy <- polar2xy(i, seq(0, 1, length.out = 100))
-  lines(cxy$x, cxy$y, type = "l", col = "gray", lty = 3)
-}
-for(i in graduations1){
-text(x = 0, y = graduations1, labels = graduations1, col = "gray", cex = 0.7, adj = c(0.5, -0.2) )
-}
+r <- 40000 # Radius of the month labels
+dfinal <- frac2angle(dat.France[iend, "fracYear"]) # End day of the plot
 
-months <- c("Jan", "Fev", "Mar", "Avr", "Mai", "Jun", "Jui", "Aou", "Sep", "Oct", "Nov", "Dec")
+addLegendPlot(graduations1, graduations2, r, dfinal)
 
 
-thetas <- (1:12)/12 - 0.5/12
-r <- 40000
-for(i in seq_along(months)){
-  text(x = r * cos(frac2angle(thetas[i])), y = r * sin(frac2angle(thetas[i])), labels = months[i], srt = 90 - thetas[i]*360)
-}
-
-text(x = 0, y = r, adj = c(0, 0), labels = " 2021", col = col2021)
-text(x = 0, y = r, adj = c(1, 0), labels = "2020 ", col = col2020)
 
 title(main = "COVID-19, patients hospitalisés", line = 2.5)
 
@@ -180,6 +204,7 @@ mtext(side = 1, text = paste0("Source des données : ", URL, "
 Mise à jour : ", today, " | ", "@flodebarre"), cex = 0.75, line = 2)
 
 }
+plotHosp()
 ```
 
 ```{r}
@@ -192,6 +217,9 @@ if(doGif){
   
   # Convert into gif
   system("convert -quality 100% -delay 0.1 -loop 0 pics/hosp*.png pics/animationHosp.gif")
+  
+  # Convert into movie
+  system("convert -quality 100% -delay 0.12 -loop 0 pics/hosp*.png pics/animationHosp.mp4")
   
   # Remove temporary files
   system("rm pics/hosp*.png")
@@ -211,7 +239,6 @@ pxy <- polar2xy(dat.France$rea, dat.France$fracYear)
 ```
 
 ```{r}
-
 plotRea <- function(iend = nrow(dat.France)){
   
 # Initalize plot
@@ -228,29 +255,11 @@ par(xpd = TRUE)
 
 graduations1 <- c(2000, 4000, 6000)
 graduations2 <- c(graduations1 - 1000, 7000)
-for(i in graduations1){
-  cxy <- polar2xy(i, seq(0, 1, length.out = 100))
-  lines(cxy$x, cxy$y, type = "l", col = "gray")
-}
-for(i in graduations2){
-  cxy <- polar2xy(i, seq(0, 1, length.out = 100))
-  lines(cxy$x, cxy$y, type = "l", col = "gray", lty = 3)
-}
-for(i in graduations1){
-text(x = 0, y = graduations1, labels = graduations1, col = "gray", cex = 0.7, adj = c(0.5, -0.2) )
-}
-
-months <- c("Jan", "Fev", "Mar", "Avr", "Mai", "Jun", "Jui", "Aou", "Sep", "Oct", "Nov", "Dec")
-
-
-thetas <- (1:12)/12 - 0.5/12
 r <- 8000
-for(i in seq_along(months)){
-  text(x = r * cos(frac2angle(thetas[i])), y = r * sin(frac2angle(thetas[i])), labels = months[i], srt = 90 - thetas[i]*360)
-}
+dfinal <- frac2angle(dat.France[iend, "fracYear"]) # End day of the plot
 
-text(x = 0, y = r, adj = c(0, 0), labels = " 2021", col = col2021)
-text(x = 0, y = r, adj = c(1, 0), labels = "2020 ", col = col2020)
+addLegendPlot(graduations1, graduations2, r, dfinal)
+
 
 title(main = "COVID-19, réanimation ou soins intensifs", line = 2.5)
 
@@ -268,7 +277,7 @@ mtext(side = 1, text = paste0("Source des données : ", URL, "
 Mise à jour : ", today, " | ", "@flodebarre"), cex = 0.75, line = 2)
 
 }
-
+plotRea()
 ```
 
 ```{r}
@@ -281,6 +290,9 @@ if(doGif){
 
   # Convert into gif
   system("convert -quality 100% -delay 0.1 -loop 0 pics/rea*.png pics/animationRea.gif")
+  
+  # Convert into movie
+  system("convert -quality 100% -delay 0.12 -loop 0 pics/rea*.png pics/animationRea.mp4")  
   
   # Remove temporary files
   system("rm pics/rea*.png")
