@@ -21,7 +21,8 @@ today <- Sys.Date() # today's date
 
 ```{r}
 # Whether to generate a gif
-doGif <- FALSE
+doGif <- TRUE
+lang <- "EN" #"FR" 
 ```
 
 
@@ -57,6 +58,12 @@ URL <- "https://www.data.gouv.fr/fr/datasets/r/f335f9ea-86e3-4ffa-9684-93c009d5e
 dataFile <- paste0("data/FranceIndic_", today, ".csv") # name file with today's date
 download.file(URL, dataFile) # download file from repo
 dat.France <- read.csv(dataFile, sep = ",", stringsAsFactors = FALSE)
+```
+
+Remove leading NAs
+```{r}
+ibegin <- which(!is.na(dat.France$hosp | !is.na(dat.France$rea)))[1]
+dat.France <- dat.France[-(1:ibegin), ]
 ```
 
 Compute sliding window average
@@ -116,11 +123,12 @@ colsTrp <- makeTransparent(cols, 70)
 ```
 
 ```{r}
-addLegendPlot <- function(graduations1, graduations2, r, dfinal){
+addLegendPlot <- function(iend, graduations1, graduations2, r, dfinal, valfinal){
   # graduations1 main graduations for number in concentric circles
   # graduations2 sub graduations
   # r radius of months / time legend
   # dfinal fraction of the last day
+  # valfinal value on the last day
   
   gmax <- max(c(graduations1, graduations2))
   lwd.grad <- 1.2
@@ -140,7 +148,12 @@ addLegendPlot <- function(graduations1, graduations2, r, dfinal){
   
   
   # Add months legend
-  months <- c("Jan", "Fev", "Mar", "Avr", "Mai", "Jun", "Jui", "Aou", "Sep", "Oct", "Nov", "Dec")
+  if(lang == "FR"){
+    months <- c("Jan", "Fev", "Mar", "Avr", "Mai", "Jun", "Jui", "Aou", "Sep", "Oct", "Nov", "Dec")
+  }else{
+    months <- c("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")    
+  }
+  
   thetas <- (1:12)/12 - 0.5/12 # Angles of the months
   for(i in seq_along(months)){
     text(x = r * cos(frac2angle(thetas[i])), y = r * sin(frac2angle(thetas[i])), labels = months[i], srt = 90 - thetas[i]*360, col = gray(0.5))
@@ -155,6 +168,10 @@ addLegendPlot <- function(graduations1, graduations2, r, dfinal){
   
   text(x = 0, y = r, adj = c(0, 0), labels = " 2021", col = col2021)
   text(x = 0, y = r, adj = c(1, 0), labels = "2020 ", col = col2020)
+  
+  # Add circle to locate the value
+    fxy <- polar2xy(valfinal, seq(0, 1, length.out = 100))
+    lines(fxy$x, fxy$y, type = "l", col = "black", lty = 1.5, lwd = lwd.grad)
 }
 ```
 
@@ -183,12 +200,17 @@ graduations1 <- c(10000, 20000, 30000)
 graduations2 <- c(graduations1 - 5000, 35000)
 r <- 40000 # Radius of the month labels
 dfinal <- frac2angle(dat.France[iend, "fracYear"]) # End day of the plot
+valfinal <- dat.France[iend, "hosp"]
 
-addLegendPlot(graduations1, graduations2, r, dfinal)
+addLegendPlot(iend, graduations1, graduations2, r, dfinal, valfinal)
 
 
+if(lang == "FR"){
+  title(main = "COVID-19, patients hospitalisés", line = 2.5)
+}else{
+  title(main = "COVID-19, hospitalized patients", line = 2.5)
+}
 
-title(main = "COVID-19, patients hospitalisés", line = 2.5)
 
 #text(x = 0, y = -r - 5000, labels = paste0("Source des données : ", URL, "
 #Mise à jour : ", today, " | ", "@flodebarre"), adj = c(0.5, 1), cex = 0.75)
@@ -200,8 +222,13 @@ points(pxy$x[1:iend], pxy$y[1:iend], col = cols, pch = 16, cex = 0.5)
 
 #legend(x = "topright", col = c(col2020, col2021), pch = 16, legend = c(expression("2020", col = "blue"), "2021"), cex = 0.8, pt.cex = 0.5, bty = "n")
 
-mtext(side = 1, text = paste0("Source des données : ", URL, "
+if(lang == "FR"){
+  mtext(side = 1, text = paste0("Source des données : ", URL, "
 Mise à jour : ", today, " | ", "@flodebarre"), cex = 0.75, line = 2)
+}else{
+  mtext(side = 1, text = paste0("Data : ", URL, "
+Date : ", today, " | ", "@flodebarre"), cex = 0.75, line = 2)
+}
 
 }
 plotHosp()
@@ -257,11 +284,16 @@ graduations1 <- c(2000, 4000, 6000)
 graduations2 <- c(graduations1 - 1000, 7000)
 r <- 8000
 dfinal <- frac2angle(dat.France[iend, "fracYear"]) # End day of the plot
+valfinal <- dat.France[iend, "rea"]
 
-addLegendPlot(graduations1, graduations2, r, dfinal)
 
+addLegendPlot(iend, graduations1, graduations2, r, dfinal, valfinal)
 
-title(main = "COVID-19, réanimation ou soins intensifs", line = 2.5)
+if(lang == "FR"){
+  title(main = "COVID-19, réanimation ou soins intensifs", line = 2.5)
+}else{
+  title(main = "COVID-19, intensive care", line = 2.5)
+}
 
 #text(x = 0, y = -r - 500, labels = paste0("Source des données : ", URL, "
 #Mise à jour : ", today, " | ", "@flodebarre"), adj = c(0.5, 1), cex = 0.75)
@@ -273,8 +305,13 @@ points(pxy$x[1:iend], pxy$y[1:iend], col = cols, pch = 16, cex = 0.5)
 
 #legend(x = "topright", col = c(col2020, col2021), pch = 16, legend = c(expression("2020", col = "blue"), "2021"), cex = 0.8, pt.cex = 0.5, bty = "n")
 
-mtext(side = 1, text = paste0("Source des données : ", URL, "
+if(lang == "FR"){
+  mtext(side = 1, text = paste0("Source des données : ", URL, "
 Mise à jour : ", today, " | ", "@flodebarre"), cex = 0.75, line = 2)
+}else{
+  mtext(side = 1, text = paste0("Data : ", URL, "
+Date : ", today, " | ", "@flodebarre"), cex = 0.75, line = 2)
+}
 
 }
 plotRea()
