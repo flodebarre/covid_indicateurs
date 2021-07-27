@@ -1,0 +1,460 @@
+---
+title: "Incidence hospi"
+author: "FD"
+date: "`r format(Sys.Date(), '%d-%B-%Y')`"
+output: 
+  html_document:
+    code_folding: hide
+    toc: true
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(global.par = TRUE)
+rm(list = ls())
+```
+
+
+```{r}
+today <- Sys.Date() # today's date
+```
+
+```{r}
+# Whether to generate a gif
+doGif <- TRUE
+lang <- "EN" #"FR" 
+
+# Whether to download again the data
+dlData <- FALSE
+```
+
+
+Mise à jour du `r today`.   
+Source des données : <https://www.data.gouv.fr/fr/datasets/synthese-des-indicateurs-de-suivi-de-lepidemie-covid-19/>
+
+# Generic functions and parameters
+
+```{r}
+# Function to compute a sliding window 
+sliding.window <- function(v, winwdt = 7, pos = 4, na.rm = TRUE){
+  # v vector to be averaged/summed
+  # winwdt width of the window 
+  # pos position of the focal day in the window
+  # FUN function to apply
+  n <- length(v)
+  # Initialize output vector
+  out <- 0 * v + (-1)
+  out[1:(pos-1)] <- NA
+  out[(n + 1 - winwdt + pos) : n] <- NA
+  
+  for(i in pos : (n - winwdt + pos)){
+    out[i] <- mean(v[(i - pos + 1):(i + winwdt - pos)], na.rm = na.rm)
+  }
+  return(out[1:n])
+}
+```
+
+```{r}
+corr_vv <- function(V1, V2, dt){
+  v1 <- v1[1:(n-dt)]
+  v2 <- v2[(1+dt):n]
+  cr <- mean(v1 * v2, na.rm = TRUE)
+  cr
+}
+
+```
+
+Dico âges
+
+```{r}
+
+ages <- c("Tous âges", 
+                 "0-9",
+                 "10-19", 
+                 "20-29", 
+                 "30-39", 
+                 "40-49", 
+                 "50-59", 
+                 "60-69", 
+                 "70-79", 
+                 "80-89", 
+                 "90+")
+names(ages) <- sort(unique(dat.Hosp$cl_age90))
+
+```
+
+## Graphics
+
+```{r}
+colCas <- rgb(0, 0, 0.75)
+colHosp <- rgb(0.9, 0, 0)
+colRea <- rgb(0.6, 0, 0.6)
+colDeath <- gray(0.4)
+
+
+```
+
+# Load and clean dat
+
+
+# Load and clean data
+
+## Indicateurs
+
+```{r}
+URL <- "https://www.data.gouv.fr/fr/datasets/r/f335f9ea-86e3-4ffa-9684-93c009d5e617"
+dataFile <- paste0("data/FranceIndic_", today, ".csv") # name file with today's date
+if(dlData){
+  download.file(URL, dataFile) # download file from repo
+}
+dat.France <- read.csv(dataFile, sep = ",", stringsAsFactors = FALSE)
+```
+
+Remove leading NAs
+```{r}
+ibegin <- which(!is.na(dat.France$hosp | !is.na(dat.France$rea)))[1]
+dat.France <- dat.France[-(1:ibegin), ]
+```
+
+## Hospital data
+
+```{r}
+# https://www.data.gouv.fr/en/datasets/donnees-hospitalieres-relatives-a-lepidemie-de-covid-19/
+# par classe d'age
+URL <- "https://www.data.gouv.fr/en/datasets/r/08c18e08-6780-452d-9b8c-ae244ad529b3"
+dataFile <- paste0("data/FranceHosp_", today, ".csv") # name file with today's date
+if(dlData){
+  download.file(URL, dataFile) # download file from repo
+}
+dat.Hosp <- read.csv(dataFile, sep = ";", stringsAsFactors = FALSE)
+
+head(dat.Hosp)
+```
+
+Load region names
+
+```{r}
+reg_names <- read.csv("data/coderegions.csv")
+reg_names
+
+# Change into dictionnary
+dic.reg <- reg_names$nom_region
+names(dic.reg) <- as.character(reg_names$code_region)
+
+unique(reg_names)
+unique(dat.Hosp$reg)
+dat.Hosp$region <- dic.reg[as.character(dat.Hosp$reg)]
+
+```
+
+
+Extract values for France and all age classes
+
+```{r}
+# All age classes
+dat.0 <- dat.Hosp[dat.Hosp$cl_age90 == 0, ]
+# Sum all regions
+dat.cumFrance <- aggregate(dat.0[, -c(1, 3, 11)], by = list(jour = dat.0$jour), FUN = sum)
+dat <- dat.cumFrance
+```
+
+# Compare values
+
+## Compare values in the two datasets
+
+```{r}
+# Merge the datasets into a single one
+dat.compare <- merge(dat.France, dat.cumFrance, by.y = "jour", by.x = "date", all = TRUE)
+
+# Checks
+!any(duplicated(dat.compare$date))
+all(dat.compare[order(dat.compare$date), "date"] == dat.compare$date)
+
+# Compare values in the two datasets
+plot(as.Date(dat.compare$date), dat.compare$hosp.x - dat.compare$hosp.y, 
+     xlab = "Date", ylab = "Indicators - Hospital data")
+points(as.Date(dat.compare$date), dat.compare$rea.x - dat.compare$rea.y, col = 2)
+points(as.Date(dat.compare$date), dat.compare$rad.x - dat.compare$rad.y, col = 3)
+points(as.Date(dat.compare$date), dat.compare$dchosp - dat.compare$dc, col = 4)
+
+# Discordant values
+dat.compare[which(dat.compare$rad.x != dat.compare$rad.y | dat.compare$dchosp != dat.compare$dc | dat.compare$hosp.x != dat.compare$hosp.y | dat.compare$rad.x != dat.compare$rad.y),]
+```
+
+## Compare incidence values
+
+Cumulative sums 
+
+```{r}
+# rad
+plot(as.Date(dat.compare$date[-1]), cumsum(dat.compare$incid_rad[-1]), main = "rad", type = "l", xlab = "date", ylab = "value", col = 4)
+points(as.Date(dat.compare$date[-1]), dat.compare$rad.x[-1], col = 2, type = "l")
+points(as.Date(dat.compare$date[-1]), dat.compare$rad.y[-1], col = 3, type = "l", lty = 2)
+legend("topleft", col = c(4, 2, 3), lty = c(1, 1, 2), legend = c("Indicateurs, cumsum incid_rad", "Indicateurs, rad", "Données hosp, rad"), bty = "n")
+
+# dc
+plot(as.Date(dat.compare$date[-1]), cumsum(dat.compare$incid_dchosp[-1]), main = "dc hosp", type = "l", xlab = "date", ylab = "value", col = 4)
+points(as.Date(dat.compare$date[-1]), dat.compare$dchosp[-1], col = 2, type = "l")
+points(as.Date(dat.compare$date[-1]), dat.compare$dc[-1], col = 3, type = "l", lty = 2)
+legend("topleft", col = c(4, 2, 3), lty = c(1, 1, 2), legend = c("Indicateurs, cumsum incid_dchosp", "Indicateurs, dchosp", "Données hosp, dc"), bty = "n")
+
+```
+
+Incidence
+
+```{r}
+# To find the right formula
+
+# rad
+plot(as.Date(dat.compare$date), dat.compare$incid_rad - c(diff(dat.compare$rad.x), NA), main = "rad")
+points(as.Date(dat.compare$date), dat.compare$incid_rad - c(NA, diff(dat.compare$rad.x)), col = 2)
+
+dat.compare$newincid_rad <- c(NA, diff(dat.compare$rad.x))
+
+plot(as.Date(dat.compare$date), dat.compare$incid_rad - c(NA, diff(dat.compare$rad.x)), col = 2)
+
+# dc
+plot(as.Date(dat.compare$date), dat.compare$incid_dchosp - c(diff(dat.compare$dchosp), NA), main = "rad")
+points(as.Date(dat.compare$date), dat.compare$incid_dchosp - c(NA, diff(dat.compare$dchosp)), col = 2)
+
+dat.compare$newincid_dchosp <- c(NA, diff(dat.compare$dchosp))
+
+plot(as.Date(dat.compare$date), dat.compare$incid_dchosp - c(NA, diff(dat.compare$dchosp)), col = 2)
+hist(dat.compare$incid_dchosp - c(NA, diff(dat.compare$dchosp)), breaks = seq(-150, 150, by = 1), main = "Comparaison incidences dc", xlab = "Incidence donnée - calculée")
+
+plot(as.Date(dat.compare$date), dat.compare$incid_rad - c(NA, diff(dat.compare$rad.x)), col = 2)
+hist(dat.compare$incid_rad - c(NA, diff(dat.compare$rad.x)), breaks = seq(-500, 700, by = 1), main = "Comparaison incidences rad", xlab = "Incidence donnée - calculée")
+
+sum(dat.compare$incid_dchosp, na.rm = TRUE)
+dat.compare[nrow(dat.compare), "dchosp"]
+
+
+# Compute incid_hosp
+# hosp[t+1] = hosp[t] - rad[t+1] - dc[t+1] + entrees[t+1]
+n <- nrow(dat.compare)
+v1 <- c(NA, dat.compare$hosp.x[2:n] - dat.compare$hosp.x[1:(n-1)] + dat.compare$newincid_rad[2:n] + dat.compare$newincid_dchosp[2:n])
+plot(as.Date(dat.compare$date), dat.compare$incid_hosp - v1)
+
+v2 <- c(NA, dat.compare$hosp.x[2:n] - dat.compare$hosp.x[1:(n-1)] + dat.compare$newincid_rad[1:(n-1)] + dat.compare$newincid_dchosp[1:(n-1)])
+plot(as.Date(dat.compare$date), dat.compare$incid_hosp - v2)
+# v1 better
+
+v3 <- c(dat.compare$hosp.x[2:n] - dat.compare$hosp.x[1:(n-1)] + dat.compare$newincid_rad[2:n] + dat.compare$newincid_dchosp[2:n], NA)
+plot(as.Date(dat.compare$date), dat.compare$incid_hosp - v3)
+# v1 better
+
+v4 <- c(dat.compare$hosp.x[2:n] - dat.compare$hosp.x[1:(n-1)] + dat.compare$newincid_rad[1:(n-1)] + dat.compare$newincid_dchosp[1:(n-1)], NA)
+plot(as.Date(dat.compare$date), dat.compare$incid_hosp - v4)
+
+plot(as.Date(dat.compare$date), dat.compare$incid_hosp - v1, col = "red")
+points(as.Date(dat.compare$date), dat.compare$incid_hosp - v4, col = "blue")
+# v1 still better!
+
+# now v1 with the incidences of the data
+v5 <- c(NA, dat.compare$hosp.x[2:n] - dat.compare$hosp.x[1:(n-1)] + dat.compare$incid_rad[2:n] + dat.compare$incid_dchosp[2:n])
+plot(as.Date(dat.compare$date), dat.compare$incid_hosp - v5)
+
+plot(as.Date(dat.compare$date), dat.compare$incid_hosp - v1, col = "red")
+points(as.Date(dat.compare$date), dat.compare$incid_hosp - v5, col = "cyan")
+
+# Estimation is even better with this formula
+
+```
+
+Summary:   
+Incidences for deaths and rad:   
+`dat.compare$newincid_rad <- c(NA, diff(dat.compare$rad.x))`
+
+Hosp incidence:  
+`c(NA, dat.compare$hosp.x[2:n] - dat.compare$hosp.x[1:(n-1)] + dat.compare$newincid_rad[2:n] + dat.compare$newincid_dchosp[2:n])`
+
+-> Function
+
+```{r}
+computeIncidHosp <- function(hosp, cumrad, cumdc){
+  incid_rad <- c(NA, diff(cumrad))
+  incid_dc  <- c(NA, diff(cumdc))
+  n <- length(hosp)
+  
+  incid_hosp <- c(NA, hosp[2:n] - hosp[1:(n-1)] + incid_rad[2:n] + incid_dc[2:n])
+  
+  data.frame(incid_hosp = incid_hosp, 
+             incid_rad = incid_rad, 
+             incid_dc = incid_dc)
+}
+```
+
+# Incidence data
+
+source <https://legacy.data.gouv.fr/fr/datasets/donnees-relatives-aux-resultats-des-tests-virologiques-covid-19/>
+
+```{r}
+URL <- "https://legacy.data.gouv.fr/fr/datasets/r/001aca18-df6a-45c8-89e6-f82d689e6c01"
+
+dataFile <- paste0("data/Cases_", today, ".csv") # name file with today's date
+if(dlData){
+  download.file(URL, dataFile) # download file from repo
+}
+dat.Cases <- read.csv(dataFile, sep = ";", stringsAsFactors = FALSE)
+head(dat.Cases)
+
+# Add regions
+dat.Cases$region <- dic.reg[as.character(dat.Cases$reg)]
+```
+
+# By age class now!
+
+```{r}
+unique(dat.Hosp$cl_age90)
+unique(dat.Cases$cl_age90)
+
+unique(dat.Hosp$reg)
+unique(dat.Cases$reg)
+
+reg_names
+
+```
+
+```{r}
+for(ag in seq(9, 89, by = 10)){
+  fname <- paste0("figFrance_", ag, ".png")
+  png(fname, width = 1300, height = 1000, res = 200)
+  
+  sum(dat.Hosp$cl_age90 == ag)
+  sum(dat.Cases$cl_age90 == ag)
+  
+  # Subselect this age class
+  sub.Hosp <- dat.Hosp[which(dat.Hosp$cl_age90 == ag), ]
+  sub.Cases <- dat.Cases[which(dat.Cases$cl_age90 == ag), ]
+  
+  nrow(sub.Hosp)
+  
+  if(length(unique(sub.Hosp$reg)) > 1){
+    # If more than one region
+    # Focus on mainland France
+    sub.Hosp <- sub.Hosp[which(sub.Hosp$reg >= 10), ]
+    sub.Cases <- sub.Cases[which(sub.Cases$reg >= 10), ]
+  
+    # Add cases of all regions, if multiple regions
+    agg.Hosp <- aggregate(sub.Hosp[, -c(1, 2, 3, 11)], by = list(jour = sub.Hosp$jour), FUN = sum)
+    
+    agg.Cases <- aggregate(sub.Cases[, -c(1, 2, 9, 11)], by = list(jour = sub.Cases$jour), FUN = sum)
+    
+  }else{
+    agg.Hosp <- sub.Hosp
+    agg.Cases <- sub.Cases
+  }
+  
+  # Compute incidence
+  agg.Hosp[, c("incid_hosp", "incid_rad", "incid_dc")] <- computeIncidHosp(hosp = agg.Hosp$hosp, cumrad = agg.Hosp$rad, cumdc = agg.Hosp$dc)
+  
+  # Merge datasets
+  aggs <- merge(agg.Hosp, agg.Cases, by = "jour")
+  
+  # 7-day averages
+  aggs$P_ave7 <- sliding.window(aggs$P)
+  aggs$incid_hosp_ave7 <- sliding.window(aggs$incid_hosp)
+  aggs$incid_dc_ave7 <- sliding.window(aggs$incid_dc)
+  
+  # Find best delay
+  # Compute correlation
+  times <- 1:35
+  n <- nrow(aggs)
+  corhosp <- unlist(lapply(times, function(dt) mean(aggs[1:(n-dt), "P_ave7"] * aggs[(1+dt):n, "incid_hosp_ave7"], na.rm = TRUE)))
+  argmaxhosp <- times[which(corhosp == max(corhosp))]
+  plot(times, corhosp, main = ag)
+  abline(v = argmaxhosp)
+  
+  cordc <- unlist(lapply(times, function(dt) mean(aggs[1:(n-dt), "P_ave7"] * aggs[(1+dt):n, "incid_dc_ave7"], na.rm = TRUE)))
+  argmaxdc <- times[which(cordc == max(cordc))]
+  plot(times, cordc, main = ag)
+  abline(v = argmaxdc)
+  
+  
+  # Plot!
+  par(mgp = c(3, 0.25, 0), tck = -0.01, 
+      mar = c(5, 3, 3, 3))
+  
+  lwdd <- 2
+  ymax <- 8000
+  ymin <- -8000
+  alf <- 0.5
+  alf.pts <- 0.3
+  cex.pts <- 0.4
+  pch.pts <- 16
+  
+  factor <- -10
+  
+  plot(as.Date(aggs$jour), aggs$P_ave7, 
+       col = colCas, lwd = lwdd, 
+       type = "l", 
+       ylim = c(ymin, ymax), axes = FALSE,
+       xlab = "", ylab = "", 
+       main = paste0("France, classe d'âge ", ages[as.character(ag)]))
+  keep <- !is.na(aggs$P_ave7)
+  xx <- as.Date(aggs$jour)[keep]
+  yy <- aggs$P_ave7[keep]
+  n <- length(xx)
+  polygon(x = c(xx, xx[n], xx[1], xx[1]), 
+          y = c(yy, 0, 0, yy[1]), 
+          col = adjustcolor(colCas, alpha.f = alf), border = adjustcolor(colCas, alpha.f = alf))
+  
+  points(as.Date(aggs$jour), aggs$P, pch = pch.pts, cex = cex.pts, col = adjustcolor(colCas, alpha.f = alf.pts))
+  
+  
+  xx <- as.Date(aggs$jour)[1:(nrow(aggs)-argmaxhosp)]
+  yy <- factor*aggs$incid_hosp_ave7[(1+argmaxhosp):nrow(aggs)]
+  lines(xx, yy, col = colHosp, lwd = lwdd)
+  keep <- !is.na(yy)
+  xx <- xx[keep]
+  yy <- yy[keep]
+  n <- length(xx)
+  polygon(x = c(xx, xx[n], xx[1], xx[1]), 
+          y = c(yy, 0, 0, yy[1]), 
+          col = adjustcolor(colHosp, alpha.f = alf), border = adjustcolor(colHosp, alpha.f = alf))
+  
+  points(as.Date(aggs$jour)[1:(nrow(aggs)-argmaxhosp)], factor*aggs$incid_hosp[(1+argmaxhosp):nrow(aggs)], pch = pch.pts, cex = cex.pts, col = adjustcolor(colHosp, alpha.f = alf.pts))
+  
+  
+  
+  
+  xx <- seq(as.Date("2020-01-01"), as.Date("2021-08-01"), by = "month")
+  axis(1, at = xx, labels = format(xx, "%Y-%b"), las = 3, cex.axis = 0.7)
+    
+  cexx <- 0.9
+  axis(2, at = seq(0, ymax, by = 2500), las = 1, col = colCas, col.axis = colCas, cex.axis = cexx)
+    
+  zz <- seq(0, ymin/factor, by = 250)
+  axis(2, at = zz*factor, labels = zz, las = 1, col = colHosp, col.axis = colHosp, cex.axis = cexx)
+    
+  mtext(side = 3, line = 0, cex = 0.8, text = paste0("lag = ", argmaxhosp, " jours"))
+    
+  par(xpd = TRUE)
+  xxx <- "2020-06-01"
+  text(as.Date(xxx), ymax, adj = c(0, 1), labels = "Cas", col = colCas)
+  text(as.Date(xxx), ymin, adj = c(0, 0), labels = "Hospitalisations", col = colHosp)
+  par(xpd = FALSE)
+    
+  mtext(paste0(format(Sys.time(), "%Y-%m-%d"), " | @flodebarre, adapté de @jburnmurdoch","
+  Données Cas : https://legacy.data.gouv.fr/fr/datasets/donnees-relatives-aux-resultats-des-tests-virologiques-covid-19/  
+  Données Hôpitaux : https://www.data.gouv.fr/en/datasets/donnees-hospitalieres-relatives-a-lepidemie-de-covid-19/
+  "), col = gray(0.5), side = 1, adj = 1, cex = 0.45, line = 4.25)
+  
+  rm(xx, xxx, agg.Cases, agg.Hosp, sub.Hosp, sub.Cases, yy)
+  
+  
+  dev.off()
+    
+  system(paste0("open ", fname))
+    
+  nchar(fname)
+  ff <- substr(fname, 1, nchar(fname) - 4)
+  ff
+}
+  
+system("convert -delay 100 figFrance_*.png figFrance.gif")
+
+system("open -a /Applications/Firefox.app figFrance.gif")
+```
+
