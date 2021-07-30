@@ -80,7 +80,7 @@ ages <- c("Tous âges",
                  "70-79", 
                  "80-89", 
                  "90+")
-names(ages) <- sort(unique(dat.Hosp$cl_age90))
+names(ages) <- as.character(c(0, seq(9, 89, by = 10), 90))
 
 ```
 
@@ -273,10 +273,16 @@ Hosp incidence:
 
 ```{r}
 computeIncidHosp <- function(hosp, cumrad, cumdc){
+  # hosp: currently hospitalized
+  # cumrand: cumulative number of removed patients
+  # cumdc: cumulative number of hospital deaths
+  
+  # Compute daily new rad and dc
   incid_rad <- c(NA, diff(cumrad))
   incid_dc  <- c(NA, diff(cumdc))
   n <- length(hosp)
   
+  # Compute new hosp
   incid_hosp <- c(NA, hosp[2:n] - hosp[1:(n-1)] + incid_rad[2:n] + incid_dc[2:n])
   
   data.frame(incid_hosp = incid_hosp, 
