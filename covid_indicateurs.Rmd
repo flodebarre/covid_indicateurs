@@ -471,8 +471,254 @@ dat.Hosp <- read.csv(dataFile, sep = ";", stringsAsFactors = FALSE)
 
 head(dat.Hosp)
 
+unique(dat.Hosp$reg)
+```
+
+
+Incidence 
+<https://www.data.gouv.fr/en/datasets/donnees-hospitalieres-relatives-a-lepidemie-de-covid-19/>  
+`covid-hospit-incid-reg-`
+
+```{r}
+URL <- "https://www.data.gouv.fr/en/datasets/r/6fadff46-9efd-4c53-942a-54aca783c30c"
+
+dataFile <- paste0("data/FranceHospIncid_", today, ".csv") # name file with today's date
+download.file(URL, dataFile) # download file from repo
+dat.HospIncid <- read.csv(dataFile, sep = ";", stringsAsFactors = FALSE)
+
+head(dat.HospIncid)
+```
+
+
+```{r}
+# Compute flux from stocks
+# Do it first with data for which we have the answer
+rm(dat)
+dat.0 <- dat.Hosp[dat.Hosp$cl_age90 == 0, ]
+unique(dat.0$reg)
+dat.cumFrance <- aggregate(dat.0[, -c(1, 3)], by = list(jour = dat.0$jour), FUN = sum)
+dat <- dat.cumFrance
+```
+
+
+```{r}
+# Merge the datasets into a single one
+dat.compare <- merge(dat.France, dat.cumFrance, by.y = "jour", by.x = "date", all = TRUE)
+
+# Checks
+any(duplicated(dat.compare$date))
+all(dat.compare[order(dat.compare$date), "date"] == dat.compare$date)
+
+# Compare values in the two datasets
+plot(as.Date(dat.compare$date), dat.compare$hosp.x - dat.compare$hosp.y)
+points(as.Date(dat.compare$date), dat.compare$rea.x - dat.compare$rea.y, col = 2)
+points(as.Date(dat.compare$date), dat.compare$rad.x - dat.compare$rad.y, col = 3)
+points(as.Date(dat.compare$date), dat.compare$dchosp - dat.compare$dc, col = 4)
 
 ```
+
+
+```{r}
+# Compare this to the national indicators
+plot(as.Date(dat.cumFrance$jour), dat.cumFrance$hosp, type = "p", ylim = c(0, 35000), lwd = 1, main = "Hospitalisations en cours")
+points(as.Date(dat.France$date), dat.France$hosp, col = 2, lty = 2)
+
+plot(as.Date(dat.cumFrance$jour), dat.cumFrance$rea, main = "Rea en cours")
+points(as.Date(dat.France$date), dat.France$rea, col = 2, lty = 2)
+
+
+deltaFlux <- 1 # or 0
+
+# Check 
+# Check that no duplicated date
+if(any(duplicated(dat$jour))) stop("duplicated dates")
+
+# Check that dates are ordered
+if(!all(dat[order(dat$jour), "jour"] == dat$jour)) stop("days need to be ordered")
+
+dat$newrad <- c(NA, diff(dat$rad))
+dat$newdc <- c(NA, diff(dat$dc))
+
+if(any(dat$newdc < 0, na.rm = TRUE) | any(dat$newrad < 0, na.rm = TRUE)) stop("negative values")
+
+plot(as.Date(dat$jour), dat$newdc, type = "p", main = "Nouveaux dc")
+points(as.Date(dat.France$date), dat.France$incid_dchosp, col = "red")
+
+plot(as.Date(dat$jour), dat$newrad, type = "p", main = "Nouvelles sorties")
+points(as.Date(dat.France$date), dat.France$incid_rad, col = "red")
+
+## Calcul incidence hospi
+# hosp[t+1] = hosp[t] - rad[t+1] - dc[t+1] + entrees[t+1]
+dat$entreeHosp1 <- NA
+dat[2:nrow(dat), "entreeHosp1"] <- dat[2:nrow(dat), "hosp"] - dat[1:(nrow(dat)-1), "hosp"] + dat[2:nrow(dat), "newrad"] + dat[2:nrow(dat), "newdc"]
+
+# hosp[t+1] = hosp[t] - rad[t] - dc[t] + entrees[t+1]
+dat$entreeHosp0 <- NA
+dat[2:nrow(dat), "entreeHosp0"] <- dat[2:nrow(dat), "hosp"] - dat[1:(nrow(dat)-1), "hosp"] + dat[1:(nrow(dat)-1), "newrad"] + dat[1:(nrow(dat)-1), "newdc"]
+
+# hosp[t+1] = hosp[t] - rad[t] - dc[t] + entrees[t]
+dat$entreeHosp2 <- NA
+dat[1:(nrow(dat)-1), "entreeHosp2"] <- dat[2:nrow(dat), "hosp"] - dat[1:(nrow(dat)-1), "hosp"] + dat[1:(nrow(dat)-1), "newrad"] + dat[1:(nrow(dat)-1), "newdc"]
+
+datt <- merge(dat.France, dat, by.x = "date", by.y = "jour", all = TRUE)
+datt[100,]
+
+plot(as.Date(dat.France$date), dat.France$incid_hosp, pch = 16)
+points(as.Date(dat$jour), dat$entreeHosp1, col = 2)
+points(as.Date(dat$jour), dat$entreeHosp0, col = 3)
+points(as.Date(dat$jour), dat$entreeHosp2, col = 4)
+
+plot(datt$incid_hosp, datt$entreeHosp0)
+points(datt$incid_hosp, datt$entreeHosp2, col = 3, cex = 0.7)
+points(datt$incid_hosp, datt$entreeHosp1, col = 2, cex = 1)
+abline(a = 0, b = 1)
+legend(x = "topleft", inset = c(0, -0.1), col = c(1, 2, 3), legend = c("calcul 1", "calcul 2", "calcul 3"), pch = c(16, 1, 1), cex = 0.8, horiz = TRUE, yjust = 0, bty = "n")
+
+cor(datt$incid_hosp, datt$entreeHosp1, use =  "pairwise.complete.obs")
+
+```
+
+Define function to compute incidence
+
+```{r}
+computeIncidenceHosp <- function(data){
+  dat <- data
+  
+  # Check that no duplicated date
+  if(any(duplicated(dat$jour))) stop("duplicated dates")
+
+  # Check that dates are ordered
+  if(!all(dat[order(dat$jour), "jour"] == dat$jour)) stop("days need to be ordered")
+  
+  # The data present the cumulated number of deaths and of 
+  # rad; convert into incidence
+  dat$newrad <- c(NA, diff(dat$rad))
+  dat$newdc <- c(NA, diff(dat$dc))
+  
+  # Sliding average
+  dat$newdc_ave7 <- sliding.window(dat$newdc)
+  dat$newrad_ave7 <- sliding.window(dat$newrad)
+  dat$hosp_ave7 <- sliding.window(dat$hosp)
+
+  # hosp[t+1] = hosp[t] - rad[t+1] - dc[t+1] + entrees[t+1]
+  dat$entreeHosp1 <- NA
+  dat[2:nrow(dat), "entreeHosp1"] <- dat[2:nrow(dat), "hosp"] - dat[1:(nrow(dat)-1), "hosp"] + dat[2:nrow(dat), "newrad"] + dat[2:nrow(dat), "newdc"]
+
+  
+  # The same on averaged values
+  dat$entreesHosp_ave7 <- NA
+  dat[2:nrow(dat), "entreesHosp_ave7"] <- dat[2:nrow(dat), "hosp_ave7"] -   dat[1:(nrow(dat)-1), "hosp_ave7"] + dat[1:(nrow(dat)-1), "newrad_ave7"] + dat[1:(nrow(dat)-1), "newdc_ave7"]
+  
+  dat
+}
+```
+
+With full dataset
+
+```{r}
+dat.merged <- merge(dat.France, computeIncidenceHosp(dat.cumFrance), by.x = "date", by.y = "jour")
+
+par(xpd = FALSE)
+plot(dat.merged$incid_hosp, dat.merged$entreesHosp, 
+     xlab = "Incidence hosp dans les données indicateurs", 
+     ylab = "Incidence hosp calculée", pch = 16, col = rgb(0.5, 0, 0, 0.4), main = "On raw values")
+abline(a = 0, b = 1)
+text(x = 0, y = 3750, labels = paste("corr =",  signif(cor(dat.merged$incid_hosp, dat.merged$entreesHosp, use = "pairwise.complete.obs"), 4)), adj = c(0, 0.5))
+
+plot(dat.merged$incid_rad, dat.merged$newrad)
+# Difference between rad values in the two datasets
+plot(dat.merged$rad.x - cumsum(dat.merged$newrad))
+
+plot(as.Date(dat.merged$date), dat.merged$rad.x - dat.merged$rad.y)
+
+points(as.Date(dat.merged$date), dat.merged$dchosp - dat.merged$dc, col = 2)
+
+points(as.Date(dat.merged$date), dat.merged$hosp.x - dat.merged$hosp.y, col = 3)
+
+points(as.Date(dat.merged$date), dat.merged$rea.x - dat.merged$rea.y, col = 4)
+
+# Discordant values
+dat.merged[which(dat.merged$rad.x != dat.merged$rad.y | dat.merged$dchosp != dat.merged$dc | dat.merged$hosp.x != dat.merged$hosp.y),]
+
+dat.merged[which(!is.na(dat.merged$tx_incid))[1], "date"]
+
+# -> Recommencer a partir de la
+```
+
+There are some issues with the data in the early dates (discordance between the two datasets).  
+
+Do the same starting with later dates, e.g. when case data become available
+
+```{r}
+rm(dat.merged)
+
+minCaseDate <- dat.France[which(!is.na(dat.France$tx_incid))[1], "date"]
+minCaseDate
+
+dat.merged <- merge(dat.France[dat.France$date >= minCaseDate, ], computeIncidenceHosp(dat.cumFrance[dat.cumFrance$jour >= minCaseDate, ]), by.x = "date", by.y = "jour")
+
+plot(dat.merged$incid_rad, c(diff(dat.merged$rad.x), NA), 
+     xlab = "dans données indicateurs", ylab = "dans données par âge", main = "Incidence rad")
+points(dat.merged$incid_rad, c(NA, diff(dat.merged$rad.x)), col = 2)
+points(dat.merged$incid_rad, dat.merged$newrad, col = 3, pch = 4)
+
+plot(dat.merged$dchosp, dat.merged$dc, xlab = "dc dans données indicateurs", ylab = "dc dans données par âge")
+plot(dat.merged$incid_dchosp, c(diff(dat.merged$dchosp), NA), 
+     xlab = "dans données indicateurs", ylab = "dans données par âge", main = "Incidence dc")
+points(dat.merged$incid_dchosp, c(NA, diff(dat.merged$dchosp)), col = 2)
+points(dat.merged$incid_dchosp, dat.merged$newdc, col = 3, pch = 4)
+
+plot(dat.merged$incid_hosp, c(diff(dat.merged$hosp.x), NA) + dat.merged$incid_rad + dat.merged$incid_dchosp)
+
+plot(dat.merged$incid_hosp, c(NA, diff(dat.merged$hosp.x)) + dat.merged$incid_rad + dat.merged$incid_dchosp)
+abline(a = 0, b = 1, col = "red", lwd = 2)
+
+
+plot(dat.merged$incid_hosp, dat.merged$entreeHosp1, xlab = "dans données indicateurs", ylab = "calculée dans données par âge", main = "Incidence hospi")
+abline(a = 0, b = 1, col = "cyan")
+
+
+# Are the dates indeed consecutive? (yes)
+unique(diff(as.Date(dat.France$date)))
+
+plot(dat.merged$incid_rad, dat.merged$newrad)
+# Difference between rad values in the two datasets
+plot(dat.merged$rad.x - cumsum(dat.merged$newrad))
+
+plot(as.Date(dat.merged$date), dat.merged$rad.x - dat.merged$rad.y)
+
+points(as.Date(dat.merged$date), dat.merged$dchosp - dat.merged$dc, col = 2)
+
+points(as.Date(dat.merged$date), dat.merged$hosp.x - dat.merged$hosp.y, col = 3)
+
+points(as.Date(dat.merged$date), dat.merged$rea.x - dat.merged$rea.y, col = 4)
+
+# Discordant values
+dat.merged[which(dat.merged$rad.x != dat.merged$rad.y | dat.merged$dchosp != dat.merged$dc | dat.merged$hosp.x != dat.merged$hosp.y),]
+
+
+```
+
+
+```{r}
+plot(sliding.window(dat.merged$rad.x) - sliding.window(cumsum(dat.merged$newrad)))
+
+# On averaged values
+plot(sliding.window(dat.merged$incid_hosp), dat.merged$entreesHosp_ave7, 
+     xlab = "Incidence hosp dans les données indicateurs", 
+     ylab = "Incidence hosp calculée", pch = 16, col = rgb(0.5, 0, 0, 0.4), main = "On 7-day averaged values")
+abline(a = 0, b = 1)
+
+dat.merged$incidH_relativeError <- (dat.merged$incid_hosp - dat.merged$entreesHosp)/dat.merged$incid_hosp
+dat.merged$incidH_error <- (dat.merged$incid_hosp - dat.merged$entreesHosp)
+
+plot(dat.merged$incidH_relativeError)
+plot(dat.merged$incidH_error)
+mean(dat.merged$incid_hosp - dat.merged$entreesHosp, na.rm = TRUE)
+range(dat.merged$incid_hosp - dat.merged$entreesHosp, na.rm = TRUE)
+
+```
+
 
 # UK, correlation cases / deaths by age class
 
@@ -525,9 +771,11 @@ ageClasses <- list("00_19" = c("00_04", "05_09", "10_14", "15_19"),
                    "80+" = c("80_84", "85_89", "90+"))
 
 ageClasses
+```
 
+## With deaths 
 
-
+```{r UKdeaths}
 for (ac in names(ageClasses)){
   fname <- paste0("fig_", ac, ".png")
   png(fname, width = 1000, height = 1000, res = 200)
@@ -616,8 +864,100 @@ Data: https://coronavirus.data.gov.uk/details/download"), col = gray(0.5), side 
 system("convert -delay 100 fig_*.png fig.gif")
 ```
 
+## With admissions
 
-```{r}
+```{r UKadmissions}
+for (ac in names(ageClasses)){
+  fname <- paste0("fig_", ac, ".png")
+  png(fname, width = 1000, height = 1000, res = 200)
+  
+  cc <- uk.cases[which(is.element(uk.cases$age, ageClasses[[ac]])),]
+  agg.cases <- aggregate(cc$cases, by = list(date = cc$date), FUN = sum)
+  names(agg.cases)[2] <- "cases"
+  agg.cases$cases_ave7 <- sliding.window(agg.cases$cases)
+  rm(cc)
+  
+  cd <- uk.admis[which(is.element(uk.admis$age, ageClasses[[ac]])),]
+  agg.deaths <- aggregate(cd$deaths, by = list(date = cd$date), FUN = sum)
+  names(agg.deaths)[2] <- "deaths"
+
+  agg.deaths$deaths_ave7 <- sliding.window(agg.deaths$deaths)
+  rm(cd)
+  
+  agg <- merge(agg.cases, agg.deaths, by = "date")
+  # Remove NA
+  agg <- agg[!is.na(agg$cases_ave7) & !is.na(agg$deaths_ave7), ]
+  
+  # Compute correlation
+  times <- 1:35
+  n <- nrow(agg)
+  dea <- unlist(lapply(times, function(dt) mean(agg[1:(n-dt), "cases_ave7"] * agg[(1+dt):n, "deaths_ave7"], na.rm = TRUE)))
+#  plot(times, dea, main = ac)
+  argmaxdea <- times[which(dea == max(dea))]
+#  abline(v = argmaxdea)
+  
+  factor <- -10
+  par(mgp = c(3, 0.25, 0), tck = -0.01)
+  ymax <- 15000
+  ymin <- -10000
+  plot(as.Date(agg$date), agg$cases_ave7, type = "l", col = colCas, ylim = c(ymin, ymax), xaxs = "i", xlim = range(as.Date(agg$date)), axes = FALSE, 
+       xlab = "Date", ylab = "")
+  
+  lines(as.Date(agg$date)[1:(n - argmaxdea)], factor * agg$deaths_ave7[(1 + argmaxdea):n], type = "l", col = colDeath)
+  
+  alf <- 0.6
+  polygon(c(as.Date(agg$date), rev(as.Date(agg$date)), as.Date(agg$date)[1]), c(agg$cases_ave7, rep(0, n), agg$cases_ave7[1]), col = adjustcolor(colCas, alpha.f = alf), border = gray(0, 0), lwd = 0.01)
+  
+  #polygon(c(as.Date(agg$date[1:(n - argmaxdea)]), rev(as.Date(agg$date[1:(n - argmaxdea)])), as.Date(agg$date)[1]), factor* c(rep(0, n - argmaxdea), rev(agg$deaths_ave7[(1 + argmaxdea):n]), 0), col = adjustcolor(colDeath, alpha.f = alf), border = gray(0, 0), lwd = 0.01)
+  
+    
+  #lines(as.Date(agg$date)[1:(n - argmaxdea)], factor * tmp$deaths_ave7[(1 + argmaxdea):n], type = "l", col = colDeath, lwd = 3)
+  
+  polygon(x = c(as.Date(agg$date)[1:(n - argmaxdea)], rev(as.Date(agg$date)[1:(n - argmaxdea)]), as.Date(agg$date[1])), 
+          y = factor * c(agg$deaths_ave7[(1 + argmaxdea):n], rep(0, n - argmaxdea), agg$deaths_ave7[1 + argmaxdea]), col = adjustcolor(colDeath, alpha.f = alf), border = adjustcolor(colDeath, alpha.f = alf))
+  
+  title(main = paste0("England, ages ", ac))
+  
+  xx <- seq(as.Date("2020-01-01"), as.Date("2021-08-01"), by = "month")
+  axis(1, at = xx, labels = format(xx, "%Y-%b"), las = 3, cex.axis = 0.7)
+  
+  cexx <- 0.9
+  axis(2, at = seq(0, ymax, by = 2500), las = 1, col = colCas, col.axis = colCas, cex.axis = cexx)
+  
+  zz <- seq(0, ymin/factor, by = 250)
+  axis(2, at = zz*factor, labels = zz, las = 1, col = colDeath, col.axis = colDeath, cex.axis = cexx)
+  
+  mtext(side = 3, line = 0, cex = 0.8, text = paste0("lag = ", argmaxdea, " days"))
+  
+  par(xpd = TRUE)
+  xxx <- "2020-04-01"
+  text(as.Date(xxx), ymax, adj = c(0, 1), labels = "Cases", col = colCas)
+  text(as.Date(xxx), ymin, adj = c(0, 0), labels = "Deaths", col = colDeath)
+  par(xpd = FALSE)
+  
+  mtext(paste0(format(Sys.time(), "%Y-%m-%d"), "
+@flodebarre, adapted from @jburnmurdoch","
+Data: https://coronavirus.data.gov.uk/details/download"), col = gray(0.5), side = 1, adj = 1, cex = 0.55, line = 4)
+  
+  dev.off()
+  
+  system(paste0("open ", fname))
+  
+  nchar(fname)
+  ff <- substr(fname, 1, nchar(fname) - 4)
+  ff
+#  system(paste0("convert ", fname, " -resize 1000 -quality 72 -background white -alpha remove -flatten -alpha off ", ff, ".png"))
+  
+#  system(paste0("open ", ff, ".png"))
+
+  
+  }
+system("convert -delay 100 fig_*.png fig.gif")
+```
+
+
+## Other
+```{r eval = FALSE, include = FALSE}
 
 theage <- "90+"
 tmp1 <- uk.cases[uk.cases$age == theage, ]
@@ -672,6 +1012,5 @@ polygon(c(as.Date(tmp$date), rev(as.Date(tmp$date)), as.Date(tmp$date)[1]), c(re
 polygon(c(as.Date(tmp$date[1:(n - argmaxdea)]), rev(as.Date(tmp$date[1:(n - argmaxdea)])), as.Date(tmp$date)[1]), factor* c(rep(0, n - argmaxdea), rev(tmp$deaths_ave7[(1 + argmaxdea):n]), 0), col = adjustcolor(colDeath, alpha.f = alf), border = gray(0, 0), lwd = 0.01)
 
 ```
-
 
 
