@@ -1,0 +1,645 @@
+---
+title: "maps"
+author: "FD"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+rm(list = ls())
+```
+
+```{r}
+# install.packages("mapsf")
+library(mapsf)
+
+library(RColorBrewer)
+
+library(colorspace)
+
+
+hcl_palettes(plot = TRUE)
+
+pal <- rev(sequential_hcl(n = 21, palette = "Inferno"))
+```
+
+# Load data
+
+## Geographic
+
+Source <https://www.data.gouv.fr/en/datasets/contours-des-departements-francais-issus-d-openstreetmap/>
+© les contributeurs d'OpenStreetMap sous licence ODbL
+
+```{r}
+franceDeps <- st_read("../Sandbox/maps/data/departements-20140306-100m-shp/departements-20140306-100m.shp")
+head(franceDeps)
+
+# Separate out metropolitain France
+franceDeps.metro <- franceDeps[nchar(franceDeps$code_insee) == 2, ]
+franceDeps.OM <- franceDeps[nchar(franceDeps$code_insee) > 2, ]
+
+unique(paste(franceDeps.OM$code_insee, franceDeps.OM$nom))
+
+guadeloupe <- franceDeps[franceDeps$code_insee == "971", ]
+martinique <- franceDeps[franceDeps$code_insee == "972", ]
+guyane <- franceDeps[franceDeps$code_insee == "973", ]
+reunion <- franceDeps[franceDeps$code_insee == "974", ]
+mayotte <- franceDeps[franceDeps$code_insee == "976", ]
+
+```
+
+## Fond de carte
+
+```{r, eval = FALSE}
+brd.col <- gray(0.6, 1)
+brd.lwd <- 0.1
+
+mf_theme(x = "default", bg = gray(0, 0), mar = c(0., 0.2, 1.5, 0.5))
+mf_init(franceDeps.metro)
+mf_map(franceDeps.metro, type = "base", add = TRUE, 
+       border = brd.col, lwd = brd.lwd, 
+)
+
+mf_credits(paste0("Données hospitalisation : https://www.data.gouv.fr/fr/datasets/donnees-hospitalieres-relatives-a-lepidemie-de-covid-19/\n", 
+                  "Contours départements : © les contributeurs d'OpenStreetMap sous licence ODbL. ", 
+                           "mapsf ", 
+                           packageVersion("mapsf")), cex = 0.5)
+
+
+
+  ### INSETS ###
+  
+  # Size of the insets for DOM
+  insetSize <- 0.09 # Size of the inset, fraction of plot
+  dxy <- 0.025 # Space between them
+  y0 <- 0.065  # Minimum y position
+  
+  # Other inset parameters
+  box.lwd <- 0.5 # Line width of the box arount inset
+  box.col <- gray(1) # Color of the box
+  BB.inset <- c(0, 0, 0.5, 0) # Bounding box (does not seem to work)
+  mar.inset <-c(0, 0, 0.6, 0) # Margins of the inset
+  line.title <- 0.5 # Line position of the inset title
+  line.title.2 <- 0.2 # Line position of the inset titles, communes
+  cex.title.inset <- 0.5 # cex of the inset title
+  cex.title.inset.2 <- 0.7 # cex of the inset title, communes
+  
+  
+  ## Guadeloupe ##
+  
+  mf_inset_on(fig = c(0, insetSize, y0 + 2*insetSize + 2*dxy, y0 + 3*insetSize + 2*dxy))
+  # Merge map and data
+#  tmp <- merge(guadeloupe, subEPCI, by.x = "SIREN_EPCI", by.y = "epci")
+  # Plot map
+  
+  mf_theme(mar = mar.inset)
+  mf_init(guadeloupe, expandBB = BB.inset)
+  mf_map(guadeloupe, type = "base", 
+#         type = "choro", 
+#         var = thevar,
+#         breaks = brks, pal = pal, 
+         border = brd.col, lwd = brd.lwd, 
+         leg_pos = "n", 
+         col_na = colNA
+        )
+  mf_title("Guadeloupe", tab = TRUE, inner = FALSE, cex = cex.title.inset, fg = 1, bg = gray(0, 0), line = line.title, pos = "center")
+  mf_inset_off()
+
+    ## Martinique ##
+  
+  mf_inset_on(fig = c(0, insetSize, y0 + 1*insetSize + 1*dxy, y0 + 2*insetSize + 1*dxy))
+  # Merge map and data
+#  tmp <- merge(guadeloupe, subEPCI, by.x = "SIREN_EPCI", by.y = "epci")
+  # Plot map
+  
+  mf_theme(mar = mar.inset)
+  mf_init(martinique, expandBB = BB.inset)
+  mf_map(martinique, type = "base", 
+#         type = "choro", 
+#         var = thevar,
+#         breaks = brks, pal = pal, 
+         border = brd.col, lwd = brd.lwd, 
+         leg_pos = "n", 
+         col_na = colNA
+        )
+  mf_title("Martinique", tab = TRUE, inner = FALSE, cex = cex.title.inset, fg = 1, bg = gray(0, 0), line = line.title, pos = "center")
+  mf_inset_off()
+  
+    ## Guyane ##
+  
+  mf_inset_on(fig = c(0, insetSize, y0 + 0*insetSize + 0*dxy, y0 + 1*insetSize + 0*dxy))
+  # Merge map and data
+#  tmp <- merge(guadeloupe, subEPCI, by.x = "SIREN_EPCI", by.y = "epci")
+  # Plot map
+  mf_theme(mar = mar.inset)
+  mf_init(guyane, expandBB = BB.inset)
+  mf_map(guyane, type = "base", 
+#         type = "choro", 
+#         var = thevar,
+#         breaks = brks, pal = pal, 
+         border = brd.col, lwd = brd.lwd, 
+         leg_pos = "n", 
+         col_na = colNA
+        )
+  mf_title("Guyane", tab = TRUE, inner = FALSE, cex = cex.title.inset, fg = 1, bg = gray(0, 0), line = line.title, pos = "center")
+  mf_inset_off()
+  
+  ## Mayotte ##
+  
+  mf_inset_on(fig = c(insetSize + dxy, 2*insetSize + dxy, y0 + 1*insetSize + 1*dxy, y0 + 2*insetSize + 1*dxy))  
+  # Plot map
+  mf_theme(mar = mar.inset)
+  mf_init(mayotte, expandBB = BB.inset)
+  mf_map(mayotte, type = "base", 
+#         type = "choro", 
+#         var = thevar,
+#         breaks = brks, pal = pal, 
+         border = brd.col, lwd = brd.lwd, 
+         leg_pos = "n", 
+         col_na = colNA
+        )
+  mf_title("Mayotte", tab = TRUE, inner = FALSE, cex = cex.title.inset, fg = 1, bg = gray(0, 0), line = line.title, pos = "center")
+  mf_inset_off()
+  
+  ## La Réunion ##
+  
+  mf_inset_on(fig = c(insetSize + dxy, 2*insetSize + dxy, y0 + 0*insetSize + 0*dxy, y0 + 1*insetSize + 0*dxy))
+   # Plot map
+  mf_theme(mar = mar.inset)
+  mf_init(reunion, expandBB = BB.inset)
+  mf_map(reunion, type = "base", 
+#         type = "choro", 
+#         var = thevar,
+#         breaks = brks, pal = pal, 
+         border = brd.col, lwd = brd.lwd, 
+         leg_pos = "n", 
+         col_na = colNA
+        )
+  mf_title("La Réunion", tab = TRUE, inner = FALSE, cex = cex.title.inset, fg = 1, bg = gray(0, 0), line = line.title, pos = "center")
+  mf_inset_off()
+ 
+  
+  ### Inset IDF ###
+  
+  insetSize2 <- 0.2
+  dxy2 <- 0.025
+  
+  depsIDF <- c("75", "92", "93", "94")#, "91", "95", "77", "78")
+  idf <- franceDeps.metro[is.element(franceDeps.metro$code_insee, depsIDF), ]
+  
+  mf_inset_on(fig = c(1 - insetSize2, 1, 1 - insetSize2, 1))
+  # Subset of departements for Ile-de-France
+  #tmp <- merge(tca, subCom[is.element(substr(subCom$commune_residence, 1, 2), deps), ], by.x = "insee", by.y = "commune_residence")
+  # Plot map
+  mf_theme(mar = mar.inset)
+  mf_map(idf, 
+         type = "base",
+#         type = "choro", 
+#         var = thevar,
+#         breaks = brks, pal = pal, 
+         border = brd.col, lwd = brd.lwd, 
+         leg_pos = "n", 
+         col_na = colNA
+        )
+  mf_title("Petite Couronne", tab = TRUE, inner = FALSE, cex = cex.title.inset.2, fg = 1, bg = gray(0, 0), line = line.title.2, pos = "center")
+  box(lwd = box.lwd, col = box.col)
+  mf_inset_off()
+  
+
+```
+
+
+## Données indicateurs
+
+Source <https://www.data.gouv.fr/fr/datasets/taux-dincidence-de-lepidemie-de-covid-19/>
+
+```{r}
+# Nombre de tests positifs par departement
+# Surtout pour récupérer populations par departement
+URL <- "https://www.data.gouv.fr/fr/datasets/r/bb2a18f3-bdd5-4101-8687-945d6e4e435f"
+download.file(URL, "data/incidDeps.csv")
+incidDeps <- read.csv("data/incidDeps.csv", sep = ";")
+
+# Keep only all ages
+incidDeps <- incidDeps[incidDeps$cl_age90 == 0, ]
+
+head(incidDeps)
+unique(incidDeps$cl_age90)
+unique(incidDeps$dep)
+
+depPop <- as.data.frame(cbind(dep = incidDeps$dep, pop = incidDeps$pop))
+depPop <- depPop[!duplicated(depPop$dep), ]
+depPop$pop <- as.numeric(depPop$pop)
+
+rm(incidDeps)
+```
+
+Source <https://www.data.gouv.fr/fr/datasets/synthese-des-indicateurs-de-suivi-de-lepidemie-covid-19/>
+
+```{r}
+URL <- "https://www.data.gouv.fr/fr/datasets/r/5c4e1452-3850-4b59-b11c-3dd51d7fb8b5"
+fl <- "data/indicateurs.csv"
+download.file(URL, fl)
+indicsDep <- read.csv(fl)
+head(indicsDep)
+```
+
+Week
+
+```{r}
+indicsDep$week <- paste0(format(as.Date(indicsDep$date), "%Y"), "-S", sprintf("%02d", as.numeric(format(as.Date(indicsDep$date), "%W"))))
+
+# There is no week 00, it is numbered as week of the previous year
+indicsDep[indicsDep$week == "2021-S00", "week"] <- "2020-S52"
+
+# Remove empty lines
+indicsDep <- indicsDep[!is.na(indicsDep$date), ]
+
+# Aggregate by week
+ss <- aggregate(indicsDep$incid_hosp, by = list(dep = indicsDep$dep, week = indicsDep$week), FUN = sum, na.rm = TRUE)
+ss <- merge(ss, depPop, by = "dep")
+ss$incid_hosp_prop1e5 <- ss$x / ss$pop * 100000
+
+hist(ss$incid_hosp_prop1e5)
+
+maxval <- max(ss$incid_hosp_prop1e5, na.rm = TRUE)
+maxval
+
+indicsDep.byWeek <- ss
+
+# Aggregate at France level (sum over deps)
+indicsFrance.byWeek <- aggregate(indicsDep.byWeek[, c("x", "pop")], by = list(week = indicsDep.byWeek$week), FUN = sum, na.rm = TRUE)
+
+indicsFrance.byWeek$incid_hosp_prop1e5 <- indicsFrance.byWeek$x / indicsFrance.byWeek$pop * 100000
+
+indicsFrance.byWeek  
+
+indicsFrance.byWeek$fracYear <- as.numeric(substr(indicsFrance.byWeek$week, 7, 8)) / 52
+
+# Remove first week
+#indicsFrance.byWeek <- indicsFrance.byWeek[indicsFrance.byWeek$week != "2020-S11", ]
+```
+
+## Graphical parameters
+
+```{r}
+brks <- c(seq(0, 50, by = 2.5), ceiling(maxval))
+pl <- rev(sequential_hcl(n = length(brks)-3, palette = "YlOrRd"))
+pal <- c("#FFFFEE", pl, "black")
+
+plot(seq_along(pal), col = pal, cex = 3, pch = 15)
+getCol <- function(x){
+  vapply(seq_along(x), function(i) pal[sum(x[i] > brks)], FUN.VALUE = "z")
+}
+```
+
+
+# Figure polar coordinates
+
+## Preliminary functions
+
+```{r}
+# Function to compute a sliding window 
+sliding.window <- function(v, winwdt = 7, pos = 4, na.rm = TRUE){
+  # v vector to be averaged/summed
+  # winwdt width of the window 
+  # pos position of the focal day in the window
+  # FUN function to apply
+  n <- length(v)
+  # Initialize output vector
+  out <- 0 * v + (-1)
+  out[1:(pos-1)] <- NA
+  out[(n + 1 - winwdt + pos) : n] <- NA
+  
+  for(i in pos : (n - winwdt + pos)){
+    out[i] <- mean(v[(i - pos + 1):(i + winwdt - pos)], na.rm = na.rm)
+  }
+  return(out[1:n])
+}
+
+# Conversion to polar coordinates
+
+# Polar coordinates: r, theta
+# x = r * cos(theta)
+# y = r * sin(theta)
+
+frac2angle <- function(frac){
+  # Transform fraction of year into an angle in radian
+  - frac * 2 * pi + pi/2
+}
+polar2xy <- function(r, frac){
+  maxval <- max(abs(r), na.rm = TRUE) # Get max value to center the plot
+  theta <- frac2angle(frac) # angle value in radian, rotate clockwise
+  
+  # Polar to cartesian coordinates
+  x <- r * cos(theta)
+  y <- r * sin(theta)
+
+  list(x = x, y = y, maxval = maxval)  
+}
+
+```
+
+## Plotting
+
+Compute values at France scale
+
+```{r}
+pxy <- polar2xy(indicsFrance.byWeek$incid_hosp_prop1e5, indicsFrance.byWeek$fracYear)
+
+plotHosp <- function(iend = nrow(indicsFrance.byWeek)-1){
+  
+# Initalize plot
+#par(pty = "s")
+#par(mar = rep(3, 4))
+rg <- 1.05 * c(- pxy$maxval, pxy$maxval)
+plot(0, 0, type = "n", xlim = rg, ylim = rg, 
+     xlab = "", ylab = "", 
+     asp = 1, 
+     axes = FALSE
+     )
+
+par(xpd = TRUE)
+
+graduations1 <- seq(10, 30, by = 10)
+graduations2 <- seq(5, 35, by = 10)
+
+r <- 41 # Radius of the month labels
+dfinal <- frac2angle(indicsFrance.byWeek[iend, "fracYear"]) # End day of the plot
+valfinal <- indicsFrance.byWeek[iend, "incid_hosp_prop1e5"]
+
+
+###------------------------
+gmax <- max(c(graduations1, graduations2))
+lwd.grad <- 1.2
+col.grad <- gray(0.8)
+  
+for(i in graduations1){
+    cxy <- polar2xy(i, seq(0, 1, length.out = 100))
+    lines(cxy$x, cxy$y, type = "l", col = col.grad, lwd = lwd.grad)
+  }
+for(i in graduations2){
+    cxy <- polar2xy(i, seq(0, 1, length.out = 100))
+    lines(cxy$x, cxy$y, type = "l", col = col.grad, lty = 3, lwd = lwd.grad)
+}
+  for(i in graduations1){
+  text(x = 0, y = graduations1, labels = graduations1, col = col.grad, cex = 0.7, adj = c(0.5, -0.2) )
+  text(x = 0, y = -graduations1, labels = graduations1, col = col.grad, cex = 0.7, adj = c(0.5, +1.2) )
+  }
+  
+  
+months <- c("Jan", "Fev", "Mar", "Avr", "Mai", "Jun", "Jui", "Aou", "Sep", "Oct", "Nov", "Dec")
+
+thetas <- (1:12)/12 - 0.5/12 # Angles of the months
+for(i in seq_along(months)){
+    text(x = r * cos(frac2angle(thetas[i])), y = r * sin(frac2angle(thetas[i])), labels = months[i], srt = 90 - thetas[i]*360, col = gray(0.5), cex = 0.7)
+}
+  
+###------------------------
+
+title(main = "", line = 2.5)
+
+par(xpd = FALSE)
+
+points(pxy$x[2:iend], pxy$y[2:iend], bg = getCol(indicsFrance.byWeek[2:iend, "incid_hosp_prop1e5"]), pch = 21, cex = c(rep(0.7, iend-2), 2), type = "o")
+
+}
+plotHosp()
+```
+
+
+# Map incidence hospi by week
+
+```{r}
+
+thevar <- "incid_hosp_prop1e5"
+
+#wk <- max(indicsDep$week)#"2020-S20"
+#rm(wk)
+
+
+wks <- sort(unique(indicsDep$week))
+# Remove first and last
+iwks <- seq_along(wks)
+
+#wks <- wks[2:(length(wks)-1)]
+i <- 72
+for(i in 2:(length(wks)-1)) {
+#for(wk in wks){
+  wk <- wks[i]
+
+  print(wk)
+  
+sub <- indicsDep.byWeek[indicsDep.byWeek$week == wk, ]
+#hist(sub$incid_hosp_prop1e5)
+
+  
+fname <- paste0("pics/", thevar, "_", wk, ".png")
+  
+mf_export(x = franceDeps.metro, export = "png", 
+          filename = fname, width = 700, height = 600,
+          res = 90
+            )
+
+tmp <- merge(franceDeps.metro, sub, by.y = "dep", by.x = "code_insee")
+thevar <- "incid_hosp_prop1e5"
+
+brd.col <- gray(0.4, 1)
+brd.lwd <- 0.1
+colNA <- gray(0.6)
+
+mf_theme(x = "default", bg = gray(0, 0), mar = c(0., 0.2, 1.5, 0.1))
+mf_init(tmp, expandBB = c(0, 0.1, 0.1, 0))
+mf_map(tmp, 
+       add = TRUE, 
+       border = brd.col, lwd = brd.lwd, 
+       type = "choro", 
+       var = thevar,
+       breaks = brks, pal = pal, 
+       leg_pos = "n", leg_title = "", 
+       leg_val_rnd = 0, 
+       col_na = colNA
+)
+mf_legend(type = "choro", 
+          pal = pal, val = brks, val_rnd = 1,
+          cex = 0.6, title = "", val_cex = 0.55, pos = "right")
+
+
+mf_title(txt = paste0("COVID-19 : Admissions à l'hôpital pour 100 000 habitants, semaine ", wk), bg = gray(1, 1), fg = gray(0, 1), 
+         font = 1, tab = FALSE, line = 0, inner = FALSE)
+
+mf_credits(paste0("Données hospitalisation : https://www.data.gouv.fr/fr/datasets/donnees-hospitalieres-relatives-a-lepidemie-de-covid-19/\n", 
+                  "Contours départements : © les contributeurs d'OpenStreetMap sous licence ODbL. ", 
+                           "mapsf ", 
+                           packageVersion("mapsf")), cex = 0.5)
+
+  ### INSETS ###
+  
+  # Size of the insets for DOM
+  insetSize <- 0.09 # Size of the inset, fraction of plot
+  dxy <- 0.025 # Space between them
+  y0 <- 0.065  # Minimum y position
+  
+  # Other inset parameters
+  box.lwd <- 0.5 # Line width of the box arount inset
+  box.col <- gray(1) # Color of the box
+  BB.inset <- c(0, 0, 0.5, 0) # Bounding box (does not seem to work)
+  mar.inset <-c(0, 0, 0.6, 0) # Margins of the inset
+  line.title <- 0.5 # Line position of the inset title
+  line.title.2 <- 0.2 # Line position of the inset titles, communes
+  cex.title.inset <- 0.5 # cex of the inset title
+  cex.title.inset.2 <- 0.7 # cex of the inset title, communes
+  
+  
+  ## Guadeloupe ##
+  
+  mf_inset_on(fig = c(0, insetSize, y0 + 2*insetSize + 2*dxy, y0 + 3*insetSize + 2*dxy))
+  # Merge map and data
+  tmp <- merge(guadeloupe, sub, by.y = "dep", by.x = "code_insee")
+  # Plot map
+  mf_theme(mar = mar.inset)
+  mf_init(tmp, expandBB = BB.inset)
+  mf_map(tmp, 
+         type = "choro", 
+         var = thevar,
+         breaks = brks, pal = pal, 
+         border = brd.col, lwd = brd.lwd, 
+         leg_pos = "n", 
+         col_na = colNA
+        )
+  mf_title("Guadeloupe", tab = TRUE, inner = FALSE, cex = cex.title.inset, fg = 1, bg = gray(0, 0), line = line.title, pos = "center")
+  mf_inset_off()
+
+    ## Martinique ##
+  
+  mf_inset_on(fig = c(0, insetSize, y0 + 1*insetSize + 1*dxy, y0 + 2*insetSize + 1*dxy))
+  # Merge map and data
+  tmp <- merge(martinique, sub, by.y = "dep", by.x = "code_insee")
+  # Plot map
+  mf_theme(mar = mar.inset)
+  mf_init(tmp, expandBB = BB.inset)
+  mf_map(tmp, 
+         type = "choro", 
+         var = thevar,
+         breaks = brks, pal = pal, 
+         border = brd.col, lwd = brd.lwd, 
+         leg_pos = "n", 
+         col_na = colNA
+        )
+  mf_title("Martinique", tab = TRUE, inner = FALSE, cex = cex.title.inset, fg = 1, bg = gray(0, 0), line = line.title, pos = "center")
+  mf_inset_off()
+  
+    ## Guyane ##
+  
+  mf_inset_on(fig = c(0, insetSize, y0 + 0*insetSize + 0*dxy, y0 + 1*insetSize + 0*dxy))
+  # Merge map and data
+  tmp <- merge(guyane, sub, by.y = "dep", by.x = "code_insee")
+  # Plot map
+  mf_theme(mar = mar.inset)
+  mf_init(tmp, expandBB = BB.inset)
+  mf_map(tmp, 
+         type = "choro", 
+         var = thevar,
+         breaks = brks, pal = pal, 
+         border = brd.col, lwd = brd.lwd, 
+         leg_pos = "n", 
+         col_na = colNA
+        )
+  mf_title("Guyane", tab = TRUE, inner = FALSE, cex = cex.title.inset, fg = 1, bg = gray(0, 0), line = line.title, pos = "center")
+  mf_inset_off()
+  
+  ## Mayotte ##
+  
+  mf_inset_on(fig = c(insetSize + dxy, 2*insetSize + dxy, y0 + 1*insetSize + 1*dxy, y0 + 2*insetSize + 1*dxy))  
+  # Merge map and data
+  tmp <- merge(mayotte, sub, by.y = "dep", by.x = "code_insee")
+  # Plot map
+  mf_theme(mar = mar.inset)
+  mf_init(tmp, expandBB = BB.inset)
+  mf_map(tmp, 
+         type = "choro", 
+         var = thevar,
+         breaks = brks, pal = pal, 
+         border = brd.col, lwd = brd.lwd, 
+         leg_pos = "n", 
+         col_na = colNA
+        )
+  mf_title("Mayotte", tab = TRUE, inner = FALSE, cex = cex.title.inset, fg = 1, bg = gray(0, 0), line = line.title, pos = "center")
+  mf_inset_off()
+  
+  ## La Réunion ##
+  
+  mf_inset_on(fig = c(insetSize + dxy, 2*insetSize + dxy, y0 + 0*insetSize + 0*dxy, y0 + 1*insetSize + 0*dxy))
+  # Merge map and data
+  tmp <- merge(reunion, sub, by.y = "dep", by.x = "code_insee")
+  # Plot map
+  mf_theme(mar = mar.inset)
+  mf_init(tmp, expandBB = BB.inset)
+  mf_map(tmp, 
+         type = "choro", 
+         var = thevar,
+         breaks = brks, pal = pal, 
+         border = brd.col, lwd = brd.lwd, 
+         leg_pos = "n", 
+         col_na = colNA
+        )
+  mf_title("La Réunion", tab = TRUE, inner = FALSE, cex = cex.title.inset, fg = 1, bg = gray(0, 0), line = line.title, pos = "center")
+  mf_inset_off()
+ 
+  
+  ### Inset IDF ###
+  
+  insetSize2 <- 0.2
+  dxy2 <- 0.025
+  
+  depsIDF <- c("75", "92", "93", "94")#, "91", "95", "77", "78")
+  idf <- franceDeps.metro[is.element(franceDeps.metro$code_insee, depsIDF), ]
+  
+  mf_inset_on(fig = c(1 - insetSize2, 1, 1 - insetSize2, 1))
+  # Merge map and data
+  tmp <- merge(idf, sub, by.y = "dep", by.x = "code_insee")
+  # Plot map
+  mf_theme(mar = mar.inset)
+  mf_init(tmp, expandBB = BB.inset)
+  mf_map(tmp, 
+         type = "choro", 
+         var = thevar,
+         breaks = brks, pal = pal, 
+         border = brd.col, lwd = brd.lwd, 
+         leg_pos = "n", 
+         col_na = colNA
+        )
+#  mf_title("Petite Couronne", tab = TRUE, inner = FALSE, cex = cex.title.inset.2, fg = 1, bg = gray(0, 0), line = line.title.2, pos = "center")
+  box(lwd = box.lwd, col = box.col)
+  mf_inset_off()
+
+
+  ## Inset curve ##
+  
+  dx <- -0.3
+  dy <- 0.235
+  insetSize3 <- 0.625
+  mf_inset_on(fig = c(dx, insetSize3 + dx, 1 - insetSize3 + dy, 1 + dy))
+  par(mar = rep(2, 4))
+
+  plotHosp(i)
+  mf_inset_off()
+  
+dev.off()
+
+#system(paste("open", fname))
+}
+
+
+# Copy the last one to free the gif
+for(icopy in 1:10){
+  system(paste0("cp ", fname, " pics/", thevar, "_", wk, "_", icopy, ".png"))
+}
+
+system(paste0("convert -delay 40 ", "pics/", thevar, "_", "*", ".png ", "pics/", thevar, "_anim.gif"))
+
+
+```
+
+
+
