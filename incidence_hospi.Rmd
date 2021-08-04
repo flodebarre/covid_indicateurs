@@ -21,10 +21,6 @@ today <- Sys.Date() # today's date
 ```
 
 ```{r}
-# Whether to generate a gif
-doGif <- TRUE
-lang <- "EN" #"FR" 
-
 # Whether to download again the data
 dlData <- FALSE
 ```
@@ -53,16 +49,6 @@ sliding.window <- function(v, winwdt = 7, pos = 4, na.rm = TRUE){
   }
   return(out[1:n])
 }
-```
-
-```{r}
-corr_vv <- function(V1, V2, dt){
-  v1 <- v1[1:(n-dt)]
-  v2 <- v2[(1+dt):n]
-  cr <- mean(v1 * v2, na.rm = TRUE)
-  cr
-}
-
 ```
 
 Dico âges
@@ -147,7 +133,6 @@ unique(dat.Hosp$reg)
 dat.Hosp$region <- dic.reg[as.character(dat.Hosp$reg)]
 
 ```
-
 
 Extract values for France and all age classes
 
@@ -269,22 +254,29 @@ Incidences for deaths and rad:
 Hosp incidence:  
 `c(NA, dat.compare$hosp.x[2:n] - dat.compare$hosp.x[1:(n-1)] + dat.compare$newincid_rad[2:n] + dat.compare$newincid_dchosp[2:n])`
 
+# Compute Incidence Hospitaliere
 -> Function
 
 ```{r}
 computeIncidHosp <- function(hosp, cumrad, cumdc){
   # hosp: currently hospitalized
-  # cumrand: cumulative number of removed patients
+  # cumrad: cumulative number of removed patients
   # cumdc: cumulative number of hospital deaths
   
+  # !! Each of these vectors corresponds to one single sequence of values in chronological order
+  
+  # Check that all same lengths
+  stopifnot(length(hosp) == length(cumrad) & length(hosp) == length(cumdc))
+
   # Compute daily new rad and dc
   incid_rad <- c(NA, diff(cumrad))
   incid_dc  <- c(NA, diff(cumdc))
-  n <- length(hosp)
+  n <- length(hosp) # Nb of lines
   
   # Compute new hosp
   incid_hosp <- c(NA, hosp[2:n] - hosp[1:(n-1)] + incid_rad[2:n] + incid_dc[2:n])
   
+  # Return result
   data.frame(incid_hosp = incid_hosp, 
              incid_rad = incid_rad, 
              incid_dc = incid_dc)
@@ -462,5 +454,93 @@ for(ag in seq(9, 89, by = 10)){
 system("convert -delay 100 figFrance_*.png figFrance.gif")
 
 system("open -a /Applications/Firefox.app figFrance.gif")
+```
+
+## Reproduce figure PE 2021-07-29
+
+```{r}
+
+# Define age classes as they appear on the figure
+classes <- list("00-19" = c(9, 19), 
+                "20-39" = c(29, 39), 
+                "40-69" = c(49, 59, 69), 
+                "70_et-plus" = c(79, 89, 90))
+
+ymins <- c(0.01, 0.067, 0.2, 0.3)
+ymaxs <- c(1673, 1600, 1465, 1400)
+i <- 3
+ncl <- names(classes[i])
+icl <- classes[[i]]
+icl
+
+for(i in seq_along(classes)){
+  ncl <- names(classes[i])
+  icl <- classes[[i]]
+
+  fname <- paste0("pics/figClasseAge_", ncl, ".png")
+  png(fname, width = 800, height = 500, res = 100)
+  
+  par(bg = NA)
+
+  # Subselect this age class
+  sub.Hosp <- dat.Hosp[which(is.element(dat.Hosp$cl_age90, icl)), ]
+  sub.Cases <- dat.Cases[which(is.element(dat.Cases$cl_age90, icl)), ]
+  
+  if(length(unique(sub.Hosp$reg)) > 1 | length(unique(sub.Hosp$cl_age90)) > 1){
+    # If more than one region or age class
+    # Focus on mainland France
+#    sub.Hosp <- sub.Hosp[which(sub.Hosp$reg >= 10), ]
+#    sub.Cases <- sub.Cases[which(sub.Cases$reg >= 10), ]
+  
+    # Add cases of all regions, if multiple regions
+    # and of all age classes
+    # (removing char columns)
+    agg.Hosp <- aggregate(sub.Hosp[, -c(1, 2, 3, 11)], by = list(jour = sub.Hosp$jour), FUN = sum)
+    
+    agg.Cases <- aggregate(sub.Cases[, -c(1, 2, 9, 11)], by = list(jour = sub.Cases$jour), FUN = sum)
+    
+  }else{
+    agg.Hosp <- sub.Hosp
+    agg.Cases <- sub.Cases
+  }
+  
+  # Compute incidence
+  agg.Hosp[, c("incid_hosp", "incid_rad", "incid_dc")] <- computeIncidHosp(hosp = agg.Hosp$hosp, cumrad = agg.Hosp$rad, cumdc = agg.Hosp$dc)
+  
+  # Merge datasets
+  aggs <- merge(agg.Hosp, agg.Cases, by = "jour")
+  
+  # 7-day averages
+  aggs$P_ave7 <- sliding.window(aggs$P, pos = 7)
+  aggs$incid_hosp_ave7 <- sliding.window(aggs$incid_hosp, pos = 7)
+  aggs$incid_dc_ave7 <- sliding.window(aggs$incid_dc, pos = 7)
+  
+  colC <- rgb(0, 0.8, 0)
+  colH <- rgb(0.2, 0.2, 0.8)
+  lwdd <- 2
+  par(las = 1)
+  ymin <- ymins[i]
+  ymax = ymaxs[i]
+  plot(as.Date(aggs$jour), 7 * aggs$P_ave7 / aggs$pop * 100000, xlim = as.Date(c("2021-03-15", max(aggs$jour))),
+       type = "l", log = "y", ylim = c(ymin, ymax), col = colC, lwd = lwdd, axes = FALSE, 
+       yaxs = "i", 
+       xlab = "", ylab = "Incidence")
+  
+  xx <- seq(as.Date("2021-03-22"), as.Date("2021-08-01"), by = "week")
+  axis(1, at = xx, labels = format(xx, "%Y-%m-%d"), las = 3, cex.axis = 0.7)
+  axis(2, at = c(ymin, 1, 10, 100, ymax), labels = c("", 1, 10, 100, ""))
+  
+  lines(as.Date(aggs$jour), 7 * aggs$incid_hosp_ave7 / aggs$pop * 100000, col = colH, lwd = lwdd)
+  
+  title(main = paste(ncl, "ans"))
+  
+  
+  
+  dev.off()
+    
+  system(paste0("open ", fname))
+    
+}
+  
 ```
 
