@@ -456,7 +456,7 @@ system("convert -delay 100 figFrance_*.png figFrance.gif")
 system("open -a /Applications/Firefox.app figFrance.gif")
 ```
 
-## Reproduce figure PE 2021-07-29
+## Reproduce figure PE 2021-07-29 / 2021-08-05
 
 ```{r}
 
@@ -511,9 +511,9 @@ for(i in seq_along(classes)){
   aggs <- merge(agg.Hosp, agg.Cases, by = "jour")
   
   # 7-day averages
-  aggs$P_ave7 <- sliding.window(aggs$P, pos = 7)
-  aggs$incid_hosp_ave7 <- sliding.window(aggs$incid_hosp, pos = 7)
-  aggs$incid_dc_ave7 <- sliding.window(aggs$incid_dc, pos = 7)
+  aggs$P_ave7 <- sliding.window(aggs$P, pos = 7, winwdt = 7)
+  aggs$incid_hosp_ave7 <- sliding.window(aggs$incid_hosp, pos = 7, winwdt = 7)
+  aggs$incid_dc_ave7 <- sliding.window(aggs$incid_dc, pos = 7, winwdt = 7)
   
   colC <- rgb(0, 0.8, 0)
   colH <- rgb(0.2, 0.2, 0.8)
@@ -526,7 +526,7 @@ for(i in seq_along(classes)){
        yaxs = "i", 
        xlab = "", ylab = "Incidence")
   
-  xx <- seq(as.Date("2021-03-22"), as.Date("2021-08-01"), by = "week")
+  xx <- seq(as.Date("2021-03-22"), as.Date("2021-08-05"), by = "week")
   axis(1, at = xx, labels = format(xx, "%Y-%m-%d"), las = 3, cex.axis = 0.7)
   axis(2, at = c(ymin, 1, 10, 100, ymax), labels = c("", 1, 10, 100, ""))
   
@@ -544,3 +544,89 @@ for(i in seq_along(classes)){
   
 ```
 
+## Figures pour EdM
+
+```{r figureEdM}
+classes <- list("00-09" = c(9), 
+                "10-19" = c(19))
+
+ymins <- c(0.0, 0.0)
+ymaxs <- c(50, 50)
+i <- 3
+ncl <- names(classes[i])
+icl <- classes[[i]]
+icl
+
+for(i in seq_along(classes)){
+  ncl <- names(classes[i])
+  icl <- classes[[i]]
+
+  fname <- paste0("pics/fig-EdM-ClasseAge_", ncl, ".png")
+  png(fname, width = 800, height = 500, res = 100)
+  
+  par(bg = "white")
+
+  # Subselect this age class
+  sub.Hosp <- dat.Hosp[which(is.element(dat.Hosp$cl_age90, icl)), ]
+  sub.Cases <- dat.Cases[which(is.element(dat.Cases$cl_age90, icl)), ]
+  
+  if(length(unique(sub.Hosp$reg)) > 1 | length(unique(sub.Hosp$cl_age90)) > 1){
+    # If more than one region or age class
+    # Focus on mainland France
+#    sub.Hosp <- sub.Hosp[which(sub.Hosp$reg >= 10), ]
+#    sub.Cases <- sub.Cases[which(sub.Cases$reg >= 10), ]
+  
+    # Add cases of all regions, if multiple regions
+    # and of all age classes
+    # (removing char columns)
+    agg.Hosp <- aggregate(sub.Hosp[, -c(1, 2, 3, 11)], by = list(jour = sub.Hosp$jour), FUN = sum)
+    
+    agg.Cases <- aggregate(sub.Cases[, -c(1, 2, 9, 11)], by = list(jour = sub.Cases$jour), FUN = sum)
+    
+  }else{
+    agg.Hosp <- sub.Hosp
+    agg.Cases <- sub.Cases
+  }
+  
+  # Compute incidence
+  agg.Hosp[, c("incid_hosp", "incid_rad", "incid_dc")] <- computeIncidHosp(hosp = agg.Hosp$hosp, cumrad = agg.Hosp$rad, cumdc = agg.Hosp$dc)
+  
+  # Merge datasets
+  aggs <- merge(agg.Hosp, agg.Cases, by = "jour")
+  
+  # 7-day averages
+  aggs$P_ave7 <- sliding.window(aggs$P, pos = 7, winwdt = 7)
+  aggs$incid_hosp_ave7 <- sliding.window(aggs$incid_hosp, pos = 7, winwdt = 7)
+  aggs$incid_dc_ave7 <- sliding.window(aggs$incid_dc, pos = 7, winwdt = 7)
+  
+  colC <- rgb(0, 0.8, 0)
+  colH <- rgb(0.2, 0.2, 0.8)
+  lwdd <- 2
+  par(las = 1)
+  ymin <- ymins[i]
+  ymax = ymaxs[i]
+  plot(as.Date(aggs$jour), aggs$P_ave7, xlim = as.Date(c("2020-03-15", max(aggs$jour))),
+       type = "l", log = "", ylim = c(ymin, ymax), col = colC, lwd = lwdd, axes = FALSE, 
+       yaxs = "i", 
+       xlab = "", ylab = "Admissions (moyenne 7j)")
+  
+  xx <- seq(as.Date("2020-03-22"), as.Date("2021-08-09"), by = "week")
+  axis(1, at = xx, labels = format(xx, "%Y-%m-%d"), las = 3, cex.axis = 0.7)
+  yy <- pretty(c(ymin, ymax), 10)
+  axis(2, at = yy)
+  axis(4, at = yy)
+  for(i in yy){
+    abline(h = i, col = gray(0.9))
+  }
+  
+  lines(as.Date(aggs$jour), aggs$incid_hosp_ave7, col = colH, lwd = lwdd)
+  
+  title(main = paste(ncl, "ans"))
+  
+  dev.off()
+    
+  system(paste0("open ", fname))
+    
+}
+  
+```
