@@ -96,6 +96,7 @@ t2 <- log(2)/2
 t4 <- log(2)/4
 t1 <- log(2)/1
 t05 <- log(2)/(5/7)
+t10 <- log(2)/(10/7)
 
 agecl <- 0
 dateMin <- "2021-06-15" # min(dat.France$jour)
@@ -174,10 +175,12 @@ plotRatio <- function(agecl, dateMin, dateMax){
   abline(h = exp(t4), col = colline, lwd = lwdd)
   abline(h = exp(t1), col = colline, lwd = lwdd)
   abline(h = exp(t05), col = colline, lwd = lwdd)
+  abline(h = exp(t10), col = colline, lwd = lwdd)
   
   abline(h = exp(-t2), col = colline, lwd = lwdd)
   abline(h = exp(-t4), col = colline, lwd = lwdd)
   abline(h = exp(-t1), col = colline, lwd = lwdd)
+  abline(h = exp(-t10), col = colline, lwd = lwdd)
   
   # Add mention direction in shaded areas
   text(as.Date((limPlot[1]+limPlot[2])/2, origin = "1970-01-01"), ylm[1], adj = c(0.5, -1), labels = "   Le nombre de cas décroît", col = colDecroiss, font = 2)
@@ -209,12 +212,16 @@ plotRatio <- function(agecl, dateMin, dateMax){
   
   text(x = as.Date(limPlot[2], origin = "1970-01-01") + dj, y = exp(t1), labels = "x2 toutes les semaines", adj = c(0, 0.5), cex = cexleg)
   
+  text(x = as.Date(limPlot[2], origin = "1970-01-01") + dj, y = exp(t10), labels = "x2 tous les 10 jours", adj = c(0, 0.5), cex = cexleg)
+
   text(x = as.Date(limPlot[2], origin = "1970-01-01") + dj, y = exp(t05), labels = "x2 tous les 5 jours", adj = c(0, 0.5), cex = cexleg)
   
   text(x = as.Date(limPlot[2], origin = "1970-01-01") + dj, y = exp(-t4), labels = "÷2 toutes les 4 semaines", adj = c(0, 0.5), cex = cexleg)
   
   text(x = as.Date(limPlot[2], origin = "1970-01-01") + dj, y = exp(-t2), labels = "÷2 toutes les 2 semaines", adj = c(0, 0.5), cex = cexleg)
   
+  text(x = as.Date(limPlot[2], origin = "1970-01-01") + dj, y = exp(-t10), labels = "÷2 tous les 10 jours", adj = c(0, 0.5), cex = cexleg)
+
   text(x = as.Date(limPlot[2], origin = "1970-01-01") + dj, y = exp(-t1), labels = "÷2 toutes les semaines", adj = c(0, 0.5), cex = cexleg)
   
   par(xpd = FALSE)
