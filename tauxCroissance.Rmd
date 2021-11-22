@@ -23,7 +23,7 @@ dlData <- FALSE
 ```{r}
 library("RColorBrewer")
 
-colJ <- brewer.pal(n = 7, name = "Set1")
+colJ <- brewer.pal(n = 7, name = "Set2")
 names(colJ) <- 1:7
 ```
 
@@ -183,20 +183,21 @@ plotRatio <- function(agecl, dateMin, dateMax){
   abline(h = exp(-t10), col = colline, lwd = lwdd)
   
   # Add mention direction in shaded areas
-  text(as.Date((limPlot[1]+limPlot[2])/2, origin = "1970-01-01"), ylm[1], adj = c(0.5, -1), labels = "   Le nombre de cas décroît", col = colDecroiss, font = 2)
-  text(as.Date((limPlot[1]+limPlot[2])/2, origin = "1970-01-01"), ylm[2], adj = c(0.5, 2), labels = "   Le nombre de cas croît", col = colCroiss, font = 2)
+  cexlabshade <- 1.2
+  text(as.Date((limPlot[1]+limPlot[2])/2, origin = "1970-01-01"), ylm[1], adj = c(0.5, -1), labels = "   Le nombre de cas décroît", col = colDecroiss, font = 1, cex = cexlabshade)
+  text(as.Date((limPlot[1]+limPlot[2])/2, origin = "1970-01-01"), ylm[2], adj = c(0.5, 2), labels = "   Le nombre de cas croît", col = colCroiss, font = 1, cex = cexlabshade)
   
   # Add axes
-  tckk <- -0.015
-  cexx <- 0.75
+  tckk <- -0.02
+  cexx <- 0.9
   days <- seq(as.Date(dateMin), as.Date(dateMax)+30, by = "day")
   
   dateFormat <- "%d/%m"
   
   axis(1, at = as.Date(range(days)), labels = rep("", 2), tck = 0, pos = ylm[1])
-  axis(1, at = seq(as.Date(dateMin), as.Date(dateMax)+14, by = "month"), labels = format(seq(as.Date(dateMin), as.Date(dateMax)+14, by = "month"), format = dateFormat), las = 3, cex.axis = cexx, tck = tckk, lwd = 0, lwd.ticks = 1, pos = ylm[1])
+  axis(1, at = seq(as.Date(dateMin), as.Date(dateMax)+14, by = "month"), labels = format(seq(as.Date(dateMin), as.Date(dateMax)+14, by = "month"), format = dateFormat), las = 1, cex.axis = cexx, tck = tckk, lwd = 0, lwd.ticks = 1, pos = ylm[1])
   
-  axis(1, at = seq(as.Date(dateMin)+16, as.Date(dateMax)+14, by = "month"), labels = format(seq(as.Date(dateMin)+16, as.Date(dateMax)+14, by = "month"), format = dateFormat), las = 3, cex.axis = cexx, tck = tckk, lwd = 0, lwd.ticks = 1, pos = ylm[1])
+  axis(1, at = seq(as.Date(dateMin)+16, as.Date(dateMax)+14, by = "month"), labels = format(seq(as.Date(dateMin)+16, as.Date(dateMax)+14, by = "month"), format = dateFormat), las = 1, cex.axis = cexx, tck = tckk, lwd = 0, lwd.ticks = 1, pos = ylm[1])
   
   axis(1, at = days, labels = rep("", length(days)), las = 3, cex.axis = cexx, tck = tckk/2, lwd = 0, lwd.ticks = 1, pos = ylm[1])
   
@@ -237,7 +238,7 @@ plotRatio <- function(agecl, dateMin, dateMax){
 Données: https://www.data.gouv.fr/fr/datasets/donnees-relatives-aux-resultats-des-tests-virologiques-covid-19/# (en date de prélèvement)
 Code: https://github.com/flodebarre/covid_indicateurs/blob/main/tauxCroissance.Rmd", side = 1, line = 2., adj = 0, cex = 0.5, family = "mono")
   
-  mtext(paste0("Ratio du nombre de cas détectés d'une semaine à l'autre
+  mtext(paste0("Ratio du nombre de cas détectés en France d'une semaine à l'autre
 (en date de prélèvement), jusqu'au ", format(as.Date(dateMax), format = "%d/%m")), font = 1, cex = 1.2, line = -0.75)
   
 }
@@ -245,18 +246,36 @@ Code: https://github.com/flodebarre/covid_indicateurs/blob/main/tauxCroissance.R
 
 plotRatio(agecl, "2021-06-01", dateMax)
 plotRatio(agecl, "2020-05-01", dateMax)
+
+plotRatio(89, "2021-06-01", dateMax)
 ```
 
+# Tests
 
-```{r, eval = FALSE}
-plot(as.Date(subdat$jour), subdat$P, col = subdat$weekday)
+```{r, fig.height = 6, fig.width = 10.66}
+par(mar = c(3, 8, 2, 8), las = 1)
 
-subdat[which(subdat$logratios7 == max(subdat$logratios7, na.rm = TRUE)), ]
+  # Subset of the data for this age class and date range
+  subdat <- dat.France[which(dat.France$jour >= dateMin & dat.France$jour <= dateMax & dat.France$cl_age90 == agecl), ]
 
-plot(as.Date(subdat$jour), subdat$T, col = subdat$weekday)
+plot(as.Date(subdat$jour), subdat$T, col = colJ[as.character(subdat$weekday)], pch = 16, 
+     ylim = c(0, 1.15*max(subdat$T)), 
+     xaxs = "i", yaxs = "i", frame.plot = FALSE, 
+     xlab = "", ylab = "")
 
-subdat[which(abs(subdat$logratios7)>1), ]
 
-subdat[subdat$T == max(subdat$T), ]
+par(xpd = FALSE)
+deremb <- as.Date("2021-10-15")
+abline(v = deremb)
+par(xpd = TRUE)
+text(x = deremb, y = max(subdat$T), labels = " fin du remboursement pour les non-vaccinés
+ sans prescription médicale", adj = c(0, 0.5), cex = 0.7)
+
+par(xpd = FALSE)
+
+legend("top", horiz = TRUE, col = colJ, legend = c("Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"), pch = 16, box.lwd = 0)
+
+title("Nombre de tests effectués")
+
 ```
 
