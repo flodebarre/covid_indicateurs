@@ -11,13 +11,14 @@ This code produces a version of Oliver Johnson's case ratio figures for French d
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-rm(list = ls()) # I don't care, I code the way I want
+rm(list = ls()) # I don't care, I code the way I want, and I like it this way
 ```
 
 # Initializations
 
 ```{r}
-dlData <- TRUE
+# Whether to download the data
+dlData <- FALSE 
 ```
 
 ```{r}
@@ -25,6 +26,7 @@ dlData <- TRUE
 library("RColorBrewer")
 library("colorspace")
 
+# Colors for days
 colJ <- brewer.pal(n = 7, name = "Set2")
 names(colJ) <- 1:7
 
@@ -57,10 +59,6 @@ if(dlData){
 }
 
 dat.France <- read.csv(dataFile, sep = ";", stringsAsFactors = FALSE)
-
-
-head(dat.France)
-unique(dat.France$cl_age90)
 ```
 
 Add info on dates
@@ -84,13 +82,12 @@ Source: <https://www.data.gouv.fr/en/datasets/jours-feries-en-france/>
 
 ```{r}
 feries <- read.csv("data/jours_feries_metropole.csv")
-head(feries)
 
 dat.France$ferie <- is.element(dat.France$jour, feries$date)
 ```
 
 
-# Compute rates
+# Compute ratios
 
 ```{r}
 computeRatios <- function(dat){
@@ -126,6 +123,7 @@ computeRatios <- function(dat){
 ```
 
 ```{r figOliverJohnson, fig.height = 6, fig.width = 10.66}
+
 # Doubling time: ln(2) / growthrate, 
 # where growth rate is ln(Nt - N0) / t
 t2 <- log(2)/2
@@ -345,12 +343,14 @@ title("Nombre de tests effectués")
 
 # Positive cases
 
-```{r}
+```{r figCasPos, fig.height = 6, fig.width = 10.66}
 par(mar = c(4, 3, 3, 1))
 agecl <- 0
 dateMin <- "2021-06-01" # min(dat.France$jour)
 dateMax <- max(dat.France$jour)
 
+
+plotFigP <- function(agecl, dateMin, dateMax){
 
   # Subset of the data for this age class and date range
   subdat <- dat.France[which(dat.France$jour >= dateMin & dat.France$jour <= dateMax & dat.France$cl_age90 == agecl), ]
@@ -372,13 +372,13 @@ dateMax <- max(dat.France$jour)
   x1 <- sequential_hcl(nn/2, "Inferno")
   x2 <- sequential_hcl(nn/2, "BluYl")
   xx <- rev(c(x1, rev(x2)))
-  plot(seq_along(xx), col = xx, pch = 16)
+  #plot(seq_along(xx), col = xx, pch = 16)
 
   colScale <- data.frame(col = xx, logval = seq(-maxVal, maxVal, length.out = length(xx)))
   colScale
   colScale$val <- exp(colScale$logval)
   colScale$logval <- seq(log)
-  plot(colScale$val, rep(1, nrow(colScale)), col = xx, pch = 16)
+  #plot(colScale$val, rep(1, nrow(colScale)), col = xx, pch = 16)
   
   # get color corresponding to a particular value
   getIndex <- function(value){
@@ -422,17 +422,16 @@ dateMax <- max(dat.France$jour)
   getCexs <- function(weekdays){
     vapply(weekdays, getCex, FUN.VALUE = 1)
   }
-```
 
 
-```{r figCasPos, fig.height = 6, fig.width = 10.66}
 layout(matrix(c(1, 1, 2, 3), ncol = 2), widths = c(10, 3), heights = c(5, 5))
 
 fgg <- gray(1)
 par(bg = gray(0.65), 
     fg = gray(1), 
-    col.axis = fgg, col.lab = fgg, col.ticks = fgg)
+    col.axis = fgg, col.lab = fgg)
 par(las = 1)
+par(mar = c(5, 4, 4, 1))
 
 par(mgp = c(2., 0.5, 0))
 
@@ -461,7 +460,11 @@ plot(as.Date(subdat$jour), subdat$P, bg = getCols(subdat$ratios7), pch = getPCHs
     # Add axes
 axis(2, pos = limPlot[1], col = "white", lwd = 0, 
      at = seq(0, max(subdat$P, na.rm = TRUE), by = 5000))
-axis.Date(1, x = c(subdat$jour, "2021-12-15"), lwd = 0, lwd.ticks = 1)
+
+
+xx <- seq(as.Date("2020-05-01"), as.Date(dateMax), by = "month")
+
+axis.Date(1, at = xx, labels = format(xx, "%b\n%Y"), lwd = 0, lwd.ticks = 1, hadj = 0.5, padj = 0.5)
 
   # Plot points  
   points(as.Date(subdat$jour), subdat$P, bg = getCols(subdat$ratios7), pch = getPCHs(subdat$weekday), cex = getCexs(subdat$weekday), col = NA)
@@ -479,10 +482,11 @@ Données: https://www.data.gouv.fr/fr/datasets/donnees-relatives-aux-resultats-d
 Code: https://github.com/flodebarre/covid_indicateurs/blob/main/tauxCroissance.Rmd", side = 1, line = 3.5, adj = 0, cex = 0.5, family = "mono")
   
 #-----------------------------
-
+xlm <- c(-0.5, 1)
+  
 par(mar = c(2, 2, 4, 2))
 plot(rep(0, nn), seq_len(nn), col = colScale$col, pch = 15, axes = FALSE, xlab = "", ylab = "", 
-      xlim = c(-0.2, 1), 
+      xlim = xlm, 
      cex = 2)
 mtext("Ratio du nb de cas 
 d'une semaine à l'autre
@@ -490,12 +494,27 @@ d'une semaine à l'autre
 
 vals <- c(0.3, 0.5, 0.75, 1, 1.5, 2, 3)
 yy <- vapply(vals, getIndex, FUN.VALUE = 1)
-text(x = rep(0.2, length(yy)), yy, labels = vals, adj = 0)
+xxx <- 0.2
+text(x = rep(-xxx, length(yy)), yy, labels = vals, adj = 1)
+
+vals2 <- exp(c(-t1, -t2, 0, t2, t1, t05))
+yy2 <- vapply(vals2, getIndex, FUN.VALUE = 1)
+
+par(xpd = TRUE)
+#points(rep(xxx, length(yy2)), yy2)
+text(x = rep(xxx, length(yy2)), yy2, 
+     labels = c("÷2 ttes les 2 semaines", 
+                "÷2 ttes les semaines", 
+                "constant", 
+                "x2 ttes les 2 semaines", 
+                "x2 ttes les semaines", 
+                "x2 ts les 5 jours"), adj = 0, cex = 0.75)
+par(xpd = FALSE)
 
 
 #-------------------------------
 dxx <- 1
-plot(rep(0, 7), rev(1:7), pch = getPCHs(1:7), bg = "white", fg = NA, xlim = c(-0.2, 1), 
+plot(rep(0, 7), rev(1:7), pch = getPCHs(1:7), bg = "white", fg = NA, xlim = xlm, 
      ylim = c(1 - dxx, 7 + dxx), 
      cex = getCexs(1:7), 
      axes = FALSE, frame.plot = FALSE, 
@@ -505,10 +524,19 @@ mtext("
       
 Jour de la semaine", cex = 0.8)
 
+}
+
+plotFigP(agecl, dateMin, dateMax)
 ```
 
 
-```{r}
+```{r figCasPosAll, fig.height = 6, fig.width = 15}
+plotFigP(agecl, "2020-05-01", dateMax)
+
+```
+
+
+```{r, eval = FALSE}
 #---------
   
   plot(subdat$weeknb, subdat$P, bg = getCols(subdat$ratios7), pch = getPCHs(subdat$weekday), cex = getCexs(subdat$weekday), col = NA)
