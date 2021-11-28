@@ -11,20 +11,23 @@ This code produces a version of Oliver Johnson's case ratio figures for French d
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-rm(list = ls())
+rm(list = ls()) # I don't care, I code the way I want
 ```
 
 # Initializations
 
 ```{r}
-dlData <- FALSE
+dlData <- TRUE
 ```
 
 ```{r}
+# Color packages
 library("RColorBrewer")
+library("colorspace")
 
 colJ <- brewer.pal(n = 7, name = "Set2")
 names(colJ) <- 1:7
+
 ```
 
 ```{r}
@@ -89,6 +92,39 @@ dat.France$ferie <- is.element(dat.France$jour, feries$date)
 
 # Compute rates
 
+```{r}
+computeRatios <- function(dat){
+  # dat: dataset
+  
+  subdat <- dat
+  
+  # Check that we have data for consecutive dates
+  stopifnot(all(diff(as.Date(subdat$jour)) == 1))
+  # When it's OK we can just go on
+  
+  # Index of the final line
+  nend <- nrow(subdat)
+  
+  subdat$ratios7 <- NA # Initialize column
+  
+  # Ratios
+  subdat[8:nend, "ratios7"] <- subdat[8:nend, "P"] / subdat[1:(nend - 7), "P"]
+  # Logs (not needed because we will plot on a log scale)
+  subdat$logratios7 <- log(subdat$ratios7)
+  
+  # Sliding average
+  subdat$ratios7.slidingave <- sliding.window(subdat$ratios7)
+  
+  # Number of tests
+  subdat[8:nend, "Tratios7"] <- subdat[8:nend, "T"] / subdat[1:(nend - 7), "T"]
+  # Sliding average
+  subdat$Tratios7.slidingave <- sliding.window(subdat$Tratios7)
+  
+  subdat # Return result
+}
+
+```
+
 ```{r figOliverJohnson, fig.height = 6, fig.width = 10.66}
 # Doubling time: ln(2) / growthrate, 
 # where growth rate is ln(Nt - N0) / t
@@ -113,27 +149,7 @@ plotRatio <- function(agecl, dateMin, dateMax){
   
   head(subdat)
   
-  # Check that we have data for consecutive dates
-  stopifnot(all(diff(as.Date(subdat$jour)) == 1))
-  # When it's OK we can just go on
-  
-  # Index of the final line
-  nend <- nrow(subdat)
-  
-  subdat$ratios7 <- NA # Initialize column
-  
-  # Ratios
-  subdat[8:nend, "ratios7"] <- subdat[8:nend, "P"] / subdat[1:(nend - 7), "P"]
-  # Logs (not needed because we will plot on a log scale)
-  subdat$logratios7 <- log(subdat$ratios7)
-  
-  # Sliding average
-  subdat$ratios7.slidingave <- sliding.window(subdat$ratios7)
-  
-  # Number of tests
-  subdat[8:nend, "Tratios7"] <- subdat[8:nend, "T"] / subdat[1:(nend - 7), "T"]
-  # Sliding average
-  subdat$Tratios7.slidingave <- sliding.window(subdat$Tratios7)
+  subdat <- computeRatios(subdat)
   
   # Get max value
   xr <- max(abs(subdat$logratios7), na.rm = TRUE)
@@ -255,7 +271,55 @@ plotRatio(89, "2021-06-01", dateMax)
 ```{r, fig.height = 6, fig.width = 10.66}
 par(mar = c(3, 8, 2, 8), las = 1)
 
-  # Subset of the data for this age class and date range
+agecl <- 0
+dateMin <- "2021-05-11"
+dateMax <- "2021-07-10"
+
+computeWeekdays <- function(agecl, dateMin, dateMax){
+    # Subset of the data for this age class and date range
+  subdat <- dat.France[which(dat.France$jour >= dateMin & dat.France$jour <= dateMax & dat.France$cl_age90 == agecl), ]
+
+  # Initialize new column for non holidays
+  subdat$keep <- TRUE
+
+  # Annotate days around a holiday (-3, +3)  
+for(i in which(subdat$ferie)){
+  subdat[seq(max(i-3, 1), min(i+3, nrow(subdat)), by = 1), "keep"] <- FALSE
+}
+  # Remove days around a holiday to avoid skewing data
+  sub2 <- subdat[which(subdat$keep), ]
+  
+  # Compute tests by weekday
+  byday <- aggregate(sub2$T, by = list(weekday = sub2$weekday), FUN = sum)  
+  # Compute frequencies
+  byday$p <- byday$x / sum(byday$x)
+  # Return table
+  byday
+}
+
+
+P.yearBefore <- computeWeekdays(0, "2021-01-01", "2021-05-01")
+P.beforePass <- computeWeekdays(0, "2021-05-10", "2021-07-10")
+P.afterPassBeforeDeremb <- computeWeekdays(0, "2021-08-09", "2021-10-10")
+P.afterPassAfterDeremb <- computeWeekdays(0, "2021-10-16", "2021-11-19")
+
+P.yearBefore$type <- 0
+P.beforePass$type <- 1    
+P.afterPassBeforeDeremb$type <- 2
+P.afterPassAfterDeremb$type <- 3
+
+P <- rbind(P.yearBefore, P.beforePass, P.afterPassBeforeDeremb, P.afterPassAfterDeremb)
+P
+
+
+P$weekday
+
+barplot(p ~ weekday + type, data = P, beside = TRUE, xlab = "type", ylab = "Proportion des tests")
+
+barplot(p ~ type + weekday, data = P, beside = TRUE, xlab = "jour de la semaine", ylab = "Proportion des tests")
+
+plot(P$weekday, P$p, ylim = c(0, max(P$p)), yaxs = "i", frame.plot = FALSE, col = P$type, xlab = "jour de la semaine", ylab = "Proportion des tests")
+
   subdat <- dat.France[which(dat.France$jour >= dateMin & dat.France$jour <= dateMax & dat.France$cl_age90 == agecl), ]
 
 plot(as.Date(subdat$jour), subdat$T, col = colJ[as.character(subdat$weekday)], pch = 16, 
@@ -276,6 +340,224 @@ par(xpd = FALSE)
 legend("top", horiz = TRUE, col = colJ, legend = c("Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"), pch = 16, box.lwd = 0)
 
 title("Nombre de tests effectués")
+
+```
+
+# Positive cases
+
+```{r}
+par(mar = c(4, 3, 3, 1))
+agecl <- 0
+dateMin <- "2021-06-01" # min(dat.France$jour)
+dateMax <- max(dat.France$jour)
+
+
+  # Subset of the data for this age class and date range
+  subdat <- dat.France[which(dat.France$jour >= dateMin & dat.France$jour <= dateMax & dat.France$cl_age90 == agecl), ]
+  
+  # Remove jours feries to avoid issues
+  # (TODO: correction script)
+  subdat[subdat$ferie, c("P", "T")] <- NA
+
+  # Compute ratios  
+  subdat <- computeRatios(subdat)
+
+  # Look for abs max ratio value
+  xrr <- max(abs(subdat[!subdat$ferie, "logratios7"]), na.rm = TRUE) # Not used
+  maxVal <- ceiling(xrr*10)/10
+
+  # Define color scale
+  # Obtained by merging two color scales
+  nn <- 100 # Number of values
+  x1 <- sequential_hcl(nn/2, "Inferno")
+  x2 <- sequential_hcl(nn/2, "BluYl")
+  xx <- rev(c(x1, rev(x2)))
+  plot(seq_along(xx), col = xx, pch = 16)
+
+  colScale <- data.frame(col = xx, logval = seq(-maxVal, maxVal, length.out = length(xx)))
+  colScale
+  colScale$val <- exp(colScale$logval)
+  colScale$logval <- seq(log)
+  plot(colScale$val, rep(1, nrow(colScale)), col = xx, pch = 16)
+  
+  # get color corresponding to a particular value
+  getIndex <- function(value){
+    which(value < colScale$val)[1] - 1
+  }
+  getCol <- function(value){
+    i <- getIndex(value)
+    colScale[i, "col"]
+  }
+  
+  getCols <- function(values){
+    vapply(values, getCol, FUN.VALUE = "X")
+  }
+
+  getPCH <- function(wkday){
+    switch(wkday, 
+           "1" = 21, 
+           "2" = 22, 
+           "3" = 23, 
+           "4" = 21, 
+           "5" = 22, 
+           "6" = 24, 
+           "7" = 25)
+  }
+  getPCHs <- function(weekdays){
+    vapply(weekdays, getPCH, FUN.VALUE = 1)
+  }
+  
+  getCex <- function(wkday){
+    cex1 <- 1.75
+    cex2 <- 0.8*cex1
+    switch(wkday, 
+           "1" = cex1, 
+           "2" = cex1, 
+           "3" = cex1, 
+           "4" = cex2, 
+           "5" = cex2, 
+           "6" = cex2, 
+           "7" = cex2)
+  }
+  getCexs <- function(weekdays){
+    vapply(weekdays, getCex, FUN.VALUE = 1)
+  }
+```
+
+
+```{r figCasPos, fig.height = 6, fig.width = 10.66}
+layout(matrix(c(1, 1, 2, 3), ncol = 2), widths = c(10, 3), heights = c(5, 5))
+
+fgg <- gray(1)
+par(bg = gray(0.65), 
+    fg = gray(1), 
+    col.axis = fgg, col.lab = fgg, col.ticks = fgg)
+par(las = 1)
+
+par(mgp = c(2., 0.5, 0))
+
+plot(as.Date(subdat$jour), subdat$P, bg = getCols(subdat$ratios7), pch = getPCHs(subdat$weekday), cex = getCexs(subdat$weekday), col = NA, 
+       yaxs = "i", xaxs = "i",  
+       ylim = c(0, 1.1*max(subdat$P, na.rm = TRUE)), 
+       frame.plot = FALSE, 
+     axes = FALSE, 
+     xlab = "", 
+     ylab = "")
+  
+  limPlot <- par("usr") # limits of the plot in user coordinates
+  op <- 0.25 # Opacity parameter
+  
+  # Add Shading
+  par(xpd = TRUE)
+
+  dj <- 7
+  polygon(x = as.Date(c(limPlot[1], limPlot[2]+dj, limPlot[2]+dj, limPlot[1], limPlot[1]), origin = "1970-01-01"), y = c(0, 0, limPlot[4], limPlot[4], 0), border = NA)
+  
+  dy <- 5000
+  for(i in seq(0, max(subdat$P, na.rm = TRUE), by = dy)){
+    lines(c(limPlot[1], limPlot[2]+dj), rep(i, 2), col = gray(1, 0.5))
+  }
+
+    # Add axes
+axis(2, pos = limPlot[1], col = "white", lwd = 0, 
+     at = seq(0, max(subdat$P, na.rm = TRUE), by = 5000))
+axis.Date(1, x = c(subdat$jour, "2021-12-15"), lwd = 0, lwd.ticks = 1)
+
+  # Plot points  
+  points(as.Date(subdat$jour), subdat$P, bg = getCols(subdat$ratios7), pch = getPCHs(subdat$weekday), cex = getCexs(subdat$weekday), col = NA)
+  par(xpd = FALSE)
+
+
+# Title
+mtext("Nombre de cas positifs par jour de test,
+coloriés selon le ratio par rapport à la semaine précédente", side = 3, line = 0.5)
+mtext(paste0("France entière, tous âges
+Données brutes, sans les jours fériés (jusqu'au ", format(as.Date(dateMax), "%d/%m"), ")" ), side = 3, line = -1.75, cex = 0.8)
+
+  mtext("@flodebarre, ratio inspiré des figures de @BristOliver 
+Données: https://www.data.gouv.fr/fr/datasets/donnees-relatives-aux-resultats-des-tests-virologiques-covid-19/# (en date de prélèvement)
+Code: https://github.com/flodebarre/covid_indicateurs/blob/main/tauxCroissance.Rmd", side = 1, line = 3.5, adj = 0, cex = 0.5, family = "mono")
+  
+#-----------------------------
+
+par(mar = c(2, 2, 4, 2))
+plot(rep(0, nn), seq_len(nn), col = colScale$col, pch = 15, axes = FALSE, xlab = "", ylab = "", 
+      xlim = c(-0.2, 1), 
+     cex = 2)
+mtext("Ratio du nb de cas 
+d'une semaine à l'autre
+(échelle log)", cex = 0.8)
+
+vals <- c(0.3, 0.5, 0.75, 1, 1.5, 2, 3)
+yy <- vapply(vals, getIndex, FUN.VALUE = 1)
+text(x = rep(0.2, length(yy)), yy, labels = vals, adj = 0)
+
+
+#-------------------------------
+dxx <- 1
+plot(rep(0, 7), rev(1:7), pch = getPCHs(1:7), bg = "white", fg = NA, xlim = c(-0.2, 1), 
+     ylim = c(1 - dxx, 7 + dxx), 
+     cex = getCexs(1:7), 
+     axes = FALSE, frame.plot = FALSE, 
+     xlab = "", ylab = "")
+text(rep(0.2, 7), rev(1:7), labels = c("Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"), adj = c(0, 0.5))
+mtext("
+      
+Jour de la semaine", cex = 0.8)
+
+```
+
+
+```{r}
+#---------
+  
+  plot(subdat$weeknb, subdat$P, bg = getCols(subdat$ratios7), pch = getPCHs(subdat$weekday), cex = getCexs(subdat$weekday), col = NA)
+# Remove jours feries
+
+
+  plot(subdat[!subdat$ferie, "ratios7"])
+
+head(subdat)  
+
+plot(subdat$weeknb, subdat$P)    
+```
+
+# Essais
+
+```{r, include = FALSE, eval = FALSE}
+
+
+display.brewer.pal(n = 8, name = 'Dark2')
+
+xx <- sequential_hcl(101, "Red-Blue")
+
+plot(seq_along(xx), col = xx, pch = 15)
+
+display.brewer.pal(n = 101, name = 'RdBu')
+
+
+nn <- 20
+plot.new()
+lgd_ = rep(NA, nn)
+lgd_[c(1,6,nn)] = c(1,6,nn)
+legend(x = 0.5, y = 0.5,
+       legend = lgd_,
+       fill = colorRampPalette(colors = c('black','red3','grey96'))(nn),
+       border = NA,
+       y.intersp = 0.5,
+       cex = 2, text.font = 2)
+
+
+colfunc <- colorRampPalette(c("red", "blue"))
+layout(matrix(1:2,ncol=2), width = c(2,1),height = c(1,1))
+plot(1:20, 1:20, pch = 19, cex=2, col = colfunc(20))
+
+legend_image <- as.raster(matrix(colfunc(20), ncol=1))
+plot(c(0,2),c(0,1),type = 'n', axes = F,xlab = '', ylab = '', main = 'legend title')
+text(x=1.5, y = seq(0,1,l=5), labels = seq(0,1,l=5))
+rasterImage(legend_image, 0, 0, 1,1)
+
+
 
 ```
 
