@@ -18,7 +18,7 @@ rm(list = ls()) # I don't care, I code the way I want, and I like it this way
 
 ```{r}
 # Whether to download the data
-dlData <- FALSE 
+dlData <- TRUE 
 ```
 
 ```{r}
@@ -123,7 +123,6 @@ computeRatios <- function(dat){
 ```
 
 ```{r figOliverJohnson, fig.height = 6, fig.width = 10.66}
-
 # Doubling time: ln(2) / growthrate, 
 # where growth rate is ln(Nt - N0) / t
 t2 <- log(2)/2
@@ -137,7 +136,7 @@ dateMin <- "2021-06-15" # min(dat.France$jour)
 dateMax <- max(dat.France$jour)
 
 
-plotRatio <- function(agecl, dateMin, dateMax){
+plotRatio <- function(agecl, dateMin, dateMax, miMonth = TRUE, year = FALSE){
   # Subset of the data for this age class and date range
   subdat <- dat.France[which(dat.France$jour >= dateMin & dat.France$jour <= dateMax & dat.France$cl_age90 == agecl), ]
   
@@ -206,12 +205,21 @@ plotRatio <- function(agecl, dateMin, dateMax){
   cexx <- 0.9
   days <- seq(as.Date(dateMin), as.Date(dateMax)+30, by = "day")
   
-  dateFormat <- "%d/%m"
+  if(year){
+    dateFormat <- "%d/%m/%y"  
+  }else{
+    dateFormat <- "%d/%m"
+  }
+
   
   axis(1, at = as.Date(range(days)), labels = rep("", 2), tck = 0, pos = ylm[1])
+  
   axis(1, at = seq(as.Date(dateMin), as.Date(dateMax)+14, by = "month"), labels = format(seq(as.Date(dateMin), as.Date(dateMax)+14, by = "month"), format = dateFormat), las = 1, cex.axis = cexx, tck = tckk, lwd = 0, lwd.ticks = 1, pos = ylm[1])
   
-  axis(1, at = seq(as.Date(dateMin)+16, as.Date(dateMax)+14, by = "month"), labels = format(seq(as.Date(dateMin)+16, as.Date(dateMax)+14, by = "month"), format = dateFormat), las = 1, cex.axis = cexx, tck = tckk, lwd = 0, lwd.ticks = 1, pos = ylm[1])
+  if(miMonth){
+      axis(1, at = seq(as.Date(dateMin)+16, as.Date(dateMax)+14, by = "month"), labels = format(seq(as.Date(dateMin)+16, as.Date(dateMax)+14, by = "month"), format = dateFormat), las = 1, cex.axis = cexx, tck = tckk, lwd = 0, lwd.ticks = 1, pos = ylm[1])
+  }
+
   
   axis(1, at = days, labels = rep("", length(days)), las = 3, cex.axis = cexx, tck = tckk/2, lwd = 0, lwd.ticks = 1, pos = ylm[1])
   
@@ -240,7 +248,12 @@ plotRatio <- function(agecl, dateMin, dateMax){
   text(x = as.Date(limPlot[2], origin = "1970-01-01") + dj, y = exp(-t1), labels = "÷2 toutes les semaines", adj = c(0, 0.5), cex = cexleg)
   
   par(xpd = FALSE)
+  
   points(as.Date(subdat$jour), subdat$ratios7, col = gray(0.3), pch = 16)
+
+  # Just last point, bigger
+  nn <- nrow(subdat)
+  points(as.Date(subdat[nn, ]$jour), subdat[nn, ]$ratios7, col = gray(0.3), pch = 16, cex = 1.5)
   
   lines(as.Date(subdat$jour), subdat$ratios7.slidingave)
   
@@ -253,15 +266,17 @@ Données: https://www.data.gouv.fr/fr/datasets/donnees-relatives-aux-resultats-d
 Code: https://github.com/flodebarre/covid_indicateurs/blob/main/tauxCroissance.Rmd", side = 1, line = 2., adj = 0, cex = 0.5, family = "mono")
   
   mtext(paste0("Ratio du nombre de cas détectés en France d'une semaine à l'autre
-(en date de prélèvement), jusqu'au ", format(as.Date(dateMax), format = "%d/%m")), font = 1, cex = 1.2, line = -0.75)
+(en date de prélèvement), jusqu'au ", format(as.Date(dateMax), format = dateFormat)), font = 1, cex = 1.2, line = -0.75)
   
 }
 
 
 plotRatio(agecl, "2021-06-01", dateMax)
-plotRatio(agecl, "2020-05-01", dateMax)
+```
 
-plotRatio(89, "2021-06-01", dateMax)
+
+```{r figOliverJohnsonLong, fig.height = 6, fig.width = 12.5}
+plotRatio(agecl, "2020-05-01", dateMax, miMonth = FALSE, year = TRUE)
 ```
 
 # Tests
