@@ -229,13 +229,15 @@ points(pxy$x[1:iend], pxy$y[1:iend], col = cols, pch = 16, cex = 0.5)
 if(lang == "FR"){
   txt <- paste0("Source des données :
 https://www.data.gouv.fr/fr/datasets/synthese-des-indicateurs-de-suivi-de-lepidemie-covid-19/
+Code : https://github.com/flodebarre/covid_indicateurs/blob/main/covid_indicateurs.Rmd
 Mise à jour : ", today, " | ", "@flodebarre")
 }else{
-  txt <- paste0("Data : 
+  txt <- paste0("Data: 
 https://www.data.gouv.fr/fr/datasets/synthese-des-indicateurs-de-suivi-de-lepidemie-covid-19/", "
-Date : ", today, " | ", "@flodebarre")
+Code: https://github.com/flodebarre/covid_indicateurs/blob/main/covid_indicateurs.Rmd
+Date: ", today, " | ", "@flodebarre")
 }
-  mtext(side = 1, text = txt, cex = 0.6, line = 2, family = "mono", adj = 0)
+  mtext(side = 1, text = txt, cex = 0.55, line = 2, family = "mono", adj = 0)
 
 }
 plotHosp()
@@ -249,12 +251,14 @@ if(doGif){
     dev.off()
   }
   
-  # Convert into gif
-  system("convert -quality 100% -delay 0.1 -loop 0 pics/hosp*.png pics/animationHosp.gif")
+  # Convert into gif (too heavy now)
+  #system("convert -quality 100% -delay 0.1 -loop 0 pics/hosp*.png pics/animationHosp.gif")
+  
+  # Convert into movie (not compatible with Twitter)
+  #system("convert -quality 100% -delay 0.12 -loop 0 pics/hosp*.png pics/animationHosp.mp4")
   
   # Convert into movie
-  system("convert -quality 100% -delay 0.12 -loop 0 pics/hosp*.png pics/animationHosp.mp4")
-  
+  system("rm pics/hosp.mp4")
   system("ffmpeg -pattern_type glob -i 'pics/hosp*.png' -vcodec libx264 -s 750x700 -pix_fmt yuv420p pics/hosp.mp4")
   
   # Remove temporary files
