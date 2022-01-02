@@ -22,7 +22,7 @@ today <- Sys.Date() # today's date
 ```{r}
 # Whether to generate a gif
 doGif <- TRUE
-lang <- "EN" #"FR" 
+lang <- "FR"#"EN" #"FR" 
 ```
 
 
@@ -106,10 +106,12 @@ polar2xy <- function(r, frac){
   list(x = x, y = y, maxval = maxval)  
 }
 
-col2020 <- "#0072B2"
-col2021 <- "#D55E00"
+col2021 <- "#0072B2"
+col2020 <- "#FF3900"#"#D55E00"
+col2022 <- "#FFBA00"
 cols <- rep(col2020, nrow(dat.France))
 cols[year == "2021"] <- col2021
+cols[year == "2022"] <- col2022
 makeTransparent<-function(someColor, alpha = 100){
   # Source : https://stackoverflow.com/questions/8047668/transparent-equivalent-of-given-color
   newColor <- col2rgb(someColor)
@@ -168,6 +170,7 @@ addLegendPlot <- function(iend, graduations1, graduations2, r, dfinal, valfinal)
   
   text(x = 0, y = r, adj = c(0, 0), labels = " 2021", col = col2021)
   text(x = 0, y = r, adj = c(1, 0), labels = "2020 ", col = col2020)
+  text(x = 0, y = r, adj = c(0, 1), labels = " 2022", col = col2022)
   
   # Add circle to locate the value
     fxy <- polar2xy(valfinal, seq(0, 1, length.out = 100))
@@ -222,13 +225,17 @@ points(pxy$x[1:iend], pxy$y[1:iend], col = cols, pch = 16, cex = 0.5)
 
 #legend(x = "topright", col = c(col2020, col2021), pch = 16, legend = c(expression("2020", col = "blue"), "2021"), cex = 0.8, pt.cex = 0.5, bty = "n")
 
+
 if(lang == "FR"){
-  mtext(side = 1, text = paste0("Source des données : ", URL, "
-Mise à jour : ", today, " | ", "@flodebarre"), cex = 0.75, line = 2)
+  txt <- paste0("Source des données :
+https://www.data.gouv.fr/fr/datasets/synthese-des-indicateurs-de-suivi-de-lepidemie-covid-19/
+Mise à jour : ", today, " | ", "@flodebarre")
 }else{
-  mtext(side = 1, text = paste0("Data : ", URL, "
-Date : ", today, " | ", "@flodebarre"), cex = 0.75, line = 2)
+  txt <- paste0("Data : 
+https://www.data.gouv.fr/fr/datasets/synthese-des-indicateurs-de-suivi-de-lepidemie-covid-19/", "
+Date : ", today, " | ", "@flodebarre")
 }
+  mtext(side = 1, text = txt, cex = 0.6, line = 2, family = "mono", adj = 0)
 
 }
 plotHosp()
@@ -248,8 +255,11 @@ if(doGif){
   # Convert into movie
   system("convert -quality 100% -delay 0.12 -loop 0 pics/hosp*.png pics/animationHosp.mp4")
   
+  system("ffmpeg -pattern_type glob -i 'pics/hosp*.png' -vcodec libx264 -s 750x700 -pix_fmt yuv420p pics/hosp.mp4")
+  
   # Remove temporary files
-  system("rm pics/hosp*.png")
+  #system("rm pics/hosp*.png")
+  
 }
 
 # Just re-do the last one

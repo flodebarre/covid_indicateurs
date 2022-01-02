@@ -59,6 +59,8 @@ if(dlData){
 }
 
 dat.France <- read.csv(dataFile, sep = ";", stringsAsFactors = FALSE)
+
+
 ```
 
 Add info on dates
