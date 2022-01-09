@@ -106,9 +106,18 @@ polar2xy <- function(r, frac){
   list(x = x, y = y, maxval = maxval)  
 }
 
-col2021 <- "#0072B2"
-col2020 <- "#FF3900"#"#D55E00"
-col2022 <- "#FFBA00"
+# col2021 <- "#0072B2"
+# col2020 <- "#FF3900"#"#D55E00"
+# col2022 <- "#FFBA00"
+
+library("MetBrewer")
+pal <- met.brewer("Derain", n = 3, type = "discrete")
+col2020 <- pal[3]
+col2021 <- pal[1]
+col2022 <- pal[2]
+
+
+
 cols <- rep(col2020, nrow(dat.France))
 cols[year == "2021"] <- col2021
 cols[year == "2022"] <- col2022
