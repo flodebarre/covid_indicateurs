@@ -592,15 +592,27 @@ axis(2, at = yy)
 axis(4, at = yy)
 xx <- seq(as.Date("2020-01-01"), as.Date("2022-12-31"), by = "month")
 axis(1, at = xx, labels = format(xx, "%b\n%Y"), cex = 0.6, padj = 0.5)
-#lines(as.Date(dat$jour), dat$posRate7j, col = "#003D1B")
+#lines(as.Date(dat$jour), 100*dat$posRate7j, col = "#003D1B")
 # Graduations
 for(i in 0:100){
   abline(h = i, col = gray(0.9))
 }
 # Add points 
 points(as.Date(dat$jour), dat$posRate * 100, pch = 16, cex = 0.6, col = "#28794B")
-  mtext("Données: https://www.data.gouv.fr/fr/datasets/donnees-relatives-aux-resultats-des-tests-virologiques-covid-19/# 
-Code: https://github.com/flodebarre/covid_indicateurs/blob/main/tauxCroissance.Rmd", side = 1, line = 3.5, adj = 0, cex = 0.5, family = "mono")
+
+# Put last point with a different color
+imax <- which(dat$jour == max(dat$jour, na.rm = TRUE))
+points(as.Date(dat[imax, ]$jour), dat[imax, ]$posRate * 100, pch = 16, cex = 1, col = "#27556B")
+
+  mtext(paste0(
+"Données : https://www.data.gouv.fr/fr/datasets/donnees-relatives-aux-resultats-des-tests-virologiques-covid-19/#,
+          (jusqu'au ", dat[imax, ]$jour, ") 
+Code : https://github.com/flodebarre/covid_indicateurs/blob/main/tauxCroissance.Rmd"), side = 1, line = 3.5, adj = 0, cex = 0.5, family = "mono")
+```
+
+```{r}
+plot(as.Date(dat$jour), dat$T)
+dat[which(dat$jour == max(dat$jour, na.rm = TRUE)), ]
 ```
 
 # Essais
