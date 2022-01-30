@@ -1,12 +1,17 @@
 ---
-title: "maps"
+title: "maps hospi"
 author: "FD"
 output: html_document
 ---
 
+<!-- 
+Note: this is not meant to be "knit", I am just using Rmd to structure my code. 
+-->
+
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-rm(list = ls())
+rm(list = ls()) # I am doing this on purpose
 ```
 
 ```{r}
@@ -17,10 +22,6 @@ library(RColorBrewer)
 
 library(colorspace)
 
-
-hcl_palettes(plot = TRUE)
-
-pal <- rev(sequential_hcl(n = 21, palette = "Inferno"))
 ```
 
 # Load data
@@ -34,7 +35,7 @@ Source <https://www.data.gouv.fr/en/datasets/contours-des-departements-francais-
 franceDeps <- st_read("../Sandbox/maps/data/departements-20140306-100m-shp/departements-20140306-100m.shp")
 head(franceDeps)
 
-# Separate out metropolitain France
+# Separate out metropolitan France
 franceDeps.metro <- franceDeps[nchar(franceDeps$code_insee) == 2, ]
 franceDeps.OM <- franceDeps[nchar(franceDeps$code_insee) > 2, ]
 
@@ -251,15 +252,18 @@ indicsDep$week <- paste0(format(as.Date(indicsDep$date), "%Y"), "-S", sprintf("%
 
 # There is no week 00, it is numbered as week of the previous year
 indicsDep[indicsDep$week == "2021-S00", "week"] <- "2020-S52"
+indicsDep[indicsDep$week == "2022-S00", "week"] <- "2021-S52"
 
 # Remove empty lines
 indicsDep <- indicsDep[!is.na(indicsDep$date), ]
 
-# Aggregate by week
+# Aggregate by week (sum of incidences every week)
 ss <- aggregate(indicsDep$incid_hosp, by = list(dep = indicsDep$dep, week = indicsDep$week), FUN = sum, na.rm = TRUE)
 ss <- merge(ss, depPop, by = "dep")
+# Scale with department population size
 ss$incid_hosp_prop1e5 <- ss$x / ss$pop * 100000
 
+# Distribution of weekly incidences
 hist(ss$incid_hosp_prop1e5)
 
 maxval <- max(ss$incid_hosp_prop1e5, na.rm = TRUE)
@@ -284,7 +288,7 @@ indicsFrance.byWeek$fracYear <- as.numeric(substr(indicsFrance.byWeek$week, 7, 8
 
 ```{r}
 brks <- c(seq(0, 50, by = 2.5), ceiling(maxval))
-pl <- rev(sequential_hcl(n = length(brks)-3, palette = "YlOrRd"))
+pl <- rev(sequential_hcl(n = length(brks)-3, palette = "YlOrBr"))
 pal <- c("#FFFFEE", pl, "black")
 
 plot(seq_along(pal), col = pal, cex = 3, pch = 15)
@@ -412,6 +416,8 @@ plotHosp()
 
 ```{r}
 
+system("rm pics/incid_hosp_prop1e5_*")
+
 thevar <- "incid_hosp_prop1e5"
 
 #wk <- max(indicsDep$week)#"2020-S20"
@@ -442,7 +448,6 @@ mf_export(x = franceDeps.metro, export = "png",
             )
 
 tmp <- merge(franceDeps.metro, sub, by.y = "dep", by.x = "code_insee")
-thevar <- "incid_hosp_prop1e5"
 
 brd.col <- gray(0.4, 1)
 brd.lwd <- 0.1
@@ -468,7 +473,7 @@ mf_legend(type = "choro",
 mf_title(txt = paste0("COVID-19 : Admissions à l'hôpital pour 100 000 habitants, semaine ", wk), bg = gray(1, 1), fg = gray(0, 1), 
          font = 1, tab = FALSE, line = 0, inner = FALSE)
 
-mf_credits(paste0("Données hospitalisation : https://www.data.gouv.fr/fr/datasets/donnees-hospitalieres-relatives-a-lepidemie-de-covid-19/\n", 
+mf_credits(paste0("Données hospitalisation : https://www.data.gouv.fr/fr/datasets/synthese-des-indicateurs-de-suivi-de-lepidemie-covid-19/\n", 
                   "Contours départements : © les contributeurs d'OpenStreetMap sous licence ODbL. ", 
                            "mapsf ", 
                            packageVersion("mapsf")), cex = 0.5)
@@ -639,6 +644,10 @@ for(icopy in 1:10){
 system(paste0("convert -delay 40 ", "pics/", thevar, "_", "*", ".png ", "pics/", thevar, "_anim.gif"))
 
 
+# Convert into movie
+system("rm pics/mapAdminHosp.mp4")
+system(paste0("ffmpeg -pattern_type glob -i 'pics/", thevar, "_", "*", ".png' -vcodec libx264 -s 700x600 -pix_fmt yuv420p -filter:v 'setpts=8.0*PTS' pics/mapAdminHosp.mp4"))
+  
 ```
 
 
