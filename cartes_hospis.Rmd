@@ -393,10 +393,11 @@ for(i in graduations2){
   
   
 months <- c("Jan", "Fev", "Mar", "Avr", "Mai", "Jun", "Jui", "Aou", "Sep", "Oct", "Nov", "Dec")
+orientation <- c(rep(0, 6), rep(1, 6)) # angle of the label (other direction for second half of the year)
 
 thetas <- (1:12)/12 - 0.5/12 # Angles of the months
 for(i in seq_along(months)){
-    text(x = r * cos(frac2angle(thetas[i])), y = r * sin(frac2angle(thetas[i])), labels = months[i], srt = 90 - thetas[i]*360, col = gray(0.5), cex = 0.7)
+    text(x = r * cos(frac2angle(thetas[i])), y = r * sin(frac2angle(thetas[i])), labels = months[i], srt = 90 - thetas[i]*360 + orientation[i] * 180, col = gray(0.5), cex = 0.7)
 }
   
 ###------------------------
