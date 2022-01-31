@@ -287,7 +287,7 @@ indicsFrance.byWeek$fracYear <- as.numeric(substr(indicsFrance.byWeek$week, 7, 8
 ## Graphical parameters
 
 ```{r}
-brks <- c(seq(0, 50, by = 2.5), ceiling(maxval))
+brks <- c(seq(0, 65, by = 2.5), ceiling(maxval))
 pl <- rev(sequential_hcl(n = length(brks)-3, palette = "YlOrBr"))
 pal <- c("#FFFFEE", pl, "black")
 
