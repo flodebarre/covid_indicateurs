@@ -1,0 +1,289 @@
+---
+title: "phasePlots"
+author: "FD"
+output: 
+  html_document:
+    self_contained: false
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Initializations
+
+```{r}
+dlData <- FALSE # Whether to download the data
+```
+
+```{r}
+source("usefulFunctions.R")
+```
+
+```{r}
+library("colorspace")
+library("MetBrewer")
+```
+
+# Load data
+
+Source: <https://www.data.gouv.fr/fr/datasets/donnees-relatives-aux-resultats-des-tests-virologiques-covid-19/#>, `sp-pos-quot-` files
+
+```{r}
+URL.Fra <- "https://www.data.gouv.fr/fr/datasets/r/dd0de5d9-b5a5-4503-930a-7b08dc0adc7c"
+URL.Reg <- "https://www.data.gouv.fr/fr/datasets/r/001aca18-df6a-45c8-89e6-f82d689e6c01"
+URL.Dep <- "https://www.data.gouv.fr/fr/datasets/r/406c6a23-e283-4300-9484-54e78c8ae675"
+
+fileFra <- "data/cases_France.csv"
+fileReg <- "data/cases_Reg.csv"
+fileDep <- "data/cases_Dep.csv"
+
+if(dlData){
+  download.file(URL.Fra, fileFra)
+  download.file(URL.Reg, fileReg)
+  download.file(URL.Dep, fileDep)
+  
+  system("git add data/cases_*")
+  system("git commit -m 'Update data daily cases'")
+}
+
+# Load files
+datFra <- read.csv(fileFra, sep = ";")
+datReg <- read.csv(fileReg, sep = ";")
+datDep <- read.csv(fileDep, sep = ";")
+
+# Add geographic information
+tmp <- read.csv("data/coderegions.csv")
+datReg <- merge(datReg, tmp, by.x = "reg", by.y = "code_region", all.x = TRUE)
+
+tmp <- read.csv("data/departements-france.csv")
+datDep <- merge(datDep, tmp, by.x = "dep", by.y = "code_departement", all = TRUE)
+
+# Sort by date!
+datReg <- datReg[order(datReg$jour), ]
+datDep <- datDep[order(datDep$jour), ]
+
+```
+
+
+Load and assign jours feries
+Source: <https://www.data.gouv.fr/en/datasets/jours-feries-en-france/>
+
+```{r}
+feries <- read.csv("data/jours_feries_metropole.csv")
+
+datFra$ferie <- is.element(datFra$jour, feries$date)
+datReg$ferie <- is.element(datReg$jour, feries$date)
+datDep$ferie <- is.element(datDep$jour, feries$date)
+```
+
+
+
+# Ratios
+
+Define color scale
+
+```{r}
+nn <- 100 # Number of values
+x1 <- sequential_hcl(nn/2, "Inferno")
+x2 <- sequential_hcl(nn/2, "BluYl")
+colorScale <- rev(c(x1, rev(x2)))
+
+```
+
+
+```{r}
+plotRatio <- function(dates, vals, ylim = NA, colScale = colorScale){
+  # dates: vector of date values, as dates
+  # vals: vector of values
+  # ylim: y range
+  
+  # Check that we have data for consecutive dates
+  stopifnot(all(diff(dates) == 1))
+  # When it's OK we can just go on
+  # Check that both vectors have the same length
+  stopifnot(length(dates) == length(vals))
+  
+  # Remove jours feries
+  iferie <- which(is.element(dates, as.Date(feries$date)))
+  print(length(iferie))
+  
+  vals[iferie] <- NA
+  
+  print(length(dates))
+  
+  # Index of the final line
+  nend <- length(vals)
+  
+  ratios7 <- rep(NA, nend) # Initialize output
+  
+  # Ratios
+  ratios7[8:nend] <- vals[8:nend] / vals[1:(nend - 7)]
+
+  # Sliding average of the ratio (centered)
+  ratios7.slidingave <- sliding.window(ratios7, pos = 4, winwdt = 7)
+  
+  # Define range of values
+  if(is.na(ylim)){
+    ylim <- range(ratios7, na.rm = TRUE)
+  }
+  
+  fgg <- gray(1)
+  par(bg = gray(0.65), 
+      fg = gray(1), 
+      col.axis = fgg, col.lab = fgg)
+  
+  par(las = 1)
+
+
+  # Initialize figure
+  plot(dates, ratios7, ylim = ylim, 
+       log = "y", axes = FALSE, 
+       xlab = "", ylab = "cas(j)/cas(j-7), échelle log", 
+       type = "n")
+  
+  abline(h = 1, lwd = 3) # No change line
+
+  # Plot doubling times
+  for(i in 1:4){
+    t <- log(2) / i
+    abline(h = exp(t), col = gray(0.9), lwd = 1.5)
+    abline(h = exp(-t), col = gray(0.9), lwd = 1.5)
+  }
+  
+  # Add axes
+  tckk <- -0.02
+  cexx <- 0.8
+  days <- seq(min(dates), max(dates)+30, by = "day")
+  months <- seq(as.Date("2020-03-01"), max(dates)+30, by = "month")
+  
+  if(diff(range(dates)) > 150){
+    dateFormat <- "%b %Y"
+    adj <- 0
+  }else{
+    dateFormat <- "%d/%m"
+    adj <- 0.5
+    
+    # Ticks every day
+    axis(1, at = days, labels = rep("", length(days)), las = 3, cex.axis = cexx, tck = tckk/2, lwd = 0, lwd.ticks = 1, pos = ylim[1])
+    
+    # Mid-month
+    axis(1, at = months + 14, labels = format(months + 14, format = dateFormat), las = 1, cex.axis = cexx, tck = tckk, lwd = 0, lwd.ticks = 1, pos = ylim[1])
+  }
+  
+  # Month ticks
+  axis(1, at = months, labels = format(months, format = dateFormat), las = 1, cex.axis = cexx, tck = tckk, lwd = 0, lwd.ticks = 1, pos = ylim[1])
+  
+  limPlot <- par("usr") # limits of the plot in user coordinates
+  axis(2, at = c(seq(0.1, 1, by = 0.1), seq(1.2, 3, by = 0.2)), tck = -.01, pos = as.Date(limPlot[1], origin = "1970-01-01"))
+  
+  #............................................
+  # Define colors
+  maxVal <- ceiling(max(abs(log(ylim)))*10)/10 # max value for the scale
+  logvals <- seq(-maxVal, maxVal, length.out = length(colScale))
+  icols <- cut(log(ratios7), breaks = logvals, labels = FALSE)
+  jcols <- cut(log(sliding.window(ratios7)), breaks = logvals, labels = FALSE)
+  
+  #...........................................
+  # Sliding average
+  lines(dates, ratios7.slidingave, col = "black")
+
+  # Plot points  
+  points(as.Date(dates), ratios7, col = colScale[icols], pch = 16)
+
+  # Just last point, bigger
+  points(dates[nend], ratios7[nend], col = colScale[icols[nend]], pch = 16, cex = 2)
+  
+  
+}
+
+unique(datReg$reg)
+tmp <- datReg[datReg$reg == 11 & datReg$cl_age90 == 0 & datReg$jour >= "2021-12-25", ]
+head(tmp)
+
+plotRatio(as.Date(tmp$jour), tmp$P)
+
+```
+
+```{r}
+
+plotRegion <- function(region){
+  tmp <- datReg[datReg$nom_region == region & datReg$cl_age90 == 0 & datReg$jour >= "2021-12-25", ]
+plotRatio(as.Date(tmp$jour), tmp$P)
+}
+
+
+layout(matrix(1:15, ncol = 3, byrow = TRUE))
+par(las = 1)
+
+# 1 Plot legend (no)
+par(mar = c(0, 0, 0, 0))
+plot(0, 0, xlab = "", ylab = "", type = "n", axes = FALSE, xlim = c(-0.2, 1), ylim = c(-1, 0.5))
+legend(x = -0.15, y = 0, 
+         col = c(col452R, colAC, colD), 
+         pch = c(16, pchAC, pchD), 
+         legend = c("non-L452R", "non-E484K & non-L452R", "D1"), 
+         box.lwd = -1, cex = 1.2)
+
+# 2 HDF
+#layout(1)
+marplot <- c(2, 2, 2, 2)
+par(mar = marplot)
+plotRegion("Hauts-de-France")
+
+
+# 3 Plot credits
+par(mar = c(0, 0, 0, 0))
+plot(0, 0, xlab = "", ylab = "", type = "n", axes = FALSE, xlim = c(-0.1, 1), ylim = c(-1, 1))
+text(0, 0, paste0("@flodebarre, ", max(dat.France$date2, na.rm = TRUE) + 3, "
+
+Data:
+https://www.data.gouv.fr/fr/datasets/
+donnees-relatives-aux-resultats-des-
+tests-virologiques-covid-19/
+
+Code: https://github.com/flodebarre/
+nouveauCriblage/blob/main/scripts/mutations.Rmd
+"), adj = 0, cex = 0.6, family = "mono")
+
+par(mar = marplot)
+
+# 4 NOR
+plotRegion("Normandie")
+
+# 5 IDF
+plotRegion("Ile-de-France")
+
+# 6 GE
+plotRegion("Grand Est")
+
+# 7 BRE
+plotRegion("Bretagne")
+
+# 8 CVL
+plotRegion("Centre-Val de Loire")
+
+# 9 BFC
+plotRegion("Bourgogne-Franche-Comté")
+
+# 10 PDL
+plotRegion("Pays de la Loire")
+
+# 11 ARA
+plotRegion("Auvergne-Rhône-Alpes")
+
+# 12 PACA
+plotRegion("Provence-Alpes-Côte d'Azur")
+
+# 13 NAQ
+plotRegion("Nouvelle-Aquitaine")
+
+# 14 OCC
+plotRegion("Occitanie")
+
+# 15 COR
+plotRegion("Corse")
+
+```
+
+
