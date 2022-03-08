@@ -3,7 +3,8 @@ title: "phasePlots"
 author: "FD"
 output: 
   html_document:
-    self_contained: false
+    self_contained: no
+    keep_md: true
 ---
 
 ```{r setup, include=FALSE}
@@ -23,13 +24,14 @@ source("usefulFunctions.R")
 ```{r}
 library("colorspace")
 library("MetBrewer")
+library("mapsf")
 ```
 
 # Load data
 
 Source: <https://www.data.gouv.fr/fr/datasets/donnees-relatives-aux-resultats-des-tests-virologiques-covid-19/#>, `sp-pos-quot-` files
 
-```{r}
+```{r loadData}
 URL.Fra <- "https://www.data.gouv.fr/fr/datasets/r/dd0de5d9-b5a5-4503-930a-7b08dc0adc7c"
 URL.Reg <- "https://www.data.gouv.fr/fr/datasets/r/001aca18-df6a-45c8-89e6-f82d689e6c01"
 URL.Dep <- "https://www.data.gouv.fr/fr/datasets/r/406c6a23-e283-4300-9484-54e78c8ae675"
@@ -51,13 +53,18 @@ if(dlData){
 datFra <- read.csv(fileFra, sep = ";")
 datReg <- read.csv(fileReg, sep = ";")
 datDep <- read.csv(fileDep, sep = ";")
+```
 
+
+```{r addGeographicInfo}
 # Add geographic information
-tmp <- read.csv("data/coderegions.csv")
-datReg <- merge(datReg, tmp, by.x = "reg", by.y = "code_region", all.x = TRUE)
+geo.regions <- read.csv("data/coderegions.csv")
+datReg <- merge(datReg, geo.regions, by.x = "reg", by.y = "code_region", all.x = TRUE)
 
-tmp <- read.csv("data/departements-france.csv")
-datDep <- merge(datDep, tmp, by.x = "dep", by.y = "code_departement", all = TRUE)
+geo.departements <- read.csv("data/departements-france.csv")
+# Add index to have consecutive values for all departements
+geo.departements$index <- 1:nrow(geo.departements)
+datDep <- merge(datDep, geo.departements, by.x = "dep", by.y = "code_departement", all = TRUE)
 
 # Sort by date!
 datReg <- datReg[order(datReg$jour), ]
@@ -93,11 +100,24 @@ colorScale <- rev(c(x1, rev(x2)))
 
 
 ```{r}
-plotRatio <- function(dates, vals, ylim = NA, colScale = colorScale){
+par(bg = "white", 
+      fg = "black", 
+      col.axis = "black", col.lab = "black")
+
+plotRatio <- function(dates, vals, ylim = NA, xlim = NA, 
+                      colScale = colorScale, 
+                      cex = 1, axesLabels = TRUE, lightAxes = FALSE, 
+                      bfg = NA){
   # dates: vector of date values, as dates
   # vals: vector of values
   # ylim: y range
-  
+  # xlim: x range
+  # colScale: color scale for the plots
+  # cex: cex
+  # axesLabels: boolean, whether to plot axes labels
+  # lightAxes: whether to plot light version of the axes
+  # bfg: background color and foreground color
+    
   # Check that we have data for consecutive dates
   stopifnot(all(diff(dates) == 1))
   # When it's OK we can just go on
@@ -106,11 +126,8 @@ plotRatio <- function(dates, vals, ylim = NA, colScale = colorScale){
   
   # Remove jours feries
   iferie <- which(is.element(dates, as.Date(feries$date)))
-  print(length(iferie))
-  
+
   vals[iferie] <- NA
-  
-  print(length(dates))
   
   # Index of the final line
   nend <- length(vals)
@@ -124,58 +141,76 @@ plotRatio <- function(dates, vals, ylim = NA, colScale = colorScale){
   ratios7.slidingave <- sliding.window(ratios7, pos = 4, winwdt = 7)
   
   # Define range of values
-  if(is.na(ylim)){
+  if(length(ylim) <= 1){
     ylim <- range(ratios7, na.rm = TRUE)
   }
   
-  fgg <- gray(1)
-  par(bg = gray(0.65), 
-      fg = gray(1), 
+  if(length(xlim) <= 1){
+    xlim <- range(dates, na.rm = TRUE)
+  }
+  
+  fgg <- "black"
+  if(!is.na(bfg)){
+      fgg <- bfg[2]
+  par(bg = bfg[1], 
+      fg = bfg[2], 
       col.axis = fgg, col.lab = fgg)
+  }
   
   par(las = 1)
 
 
   # Initialize figure
-  plot(dates, ratios7, ylim = ylim, 
+  plot(dates, ratios7, ylim = ylim, xlim = xlim, 
        log = "y", axes = FALSE, 
        xlab = "", ylab = "cas(j)/cas(j-7), échelle log", 
        type = "n")
   
-  abline(h = 1, lwd = 3) # No change line
+  par(xpd = FALSE)
+  
+  abline(h = 1, lwd = 2, col = fgg) # No change line
 
   # Plot doubling times
-  for(i in 1:4){
+  for(i in c(1, 2, 4)){
     t <- log(2) / i
-    abline(h = exp(t), col = gray(0.9), lwd = 1.5)
-    abline(h = exp(-t), col = gray(0.9), lwd = 1.5)
+    op <- 0.3
+    abline(h = exp(t), col = adjustcolor(fgg, op), lwd = 1.5)
+    abline(h = exp(-t), col = adjustcolor(fgg, op), lwd = 1.5)
   }
   
   # Add axes
   tckk <- -0.02
-  cexx <- 0.8
-  days <- seq(min(dates), max(dates)+30, by = "day")
+  cexx <- 0.8 * cex
+  cexx2 <- cexx
+  days <- seq(min(dates), max(dates), by = "day")
   months <- seq(as.Date("2020-03-01"), max(dates)+30, by = "month")
+  limPlot <- par("usr") # limits of the plot in user coordinates
   
-  if(diff(range(dates)) > 150){
-    dateFormat <- "%b %Y"
+  if(diff(range(dates)) > 150 | lightAxes){
+    dateFormat <- ifelse(lightAxes, "%b", "%b %Y")
     adj <- 0
   }else{
     dateFormat <- "%d/%m"
     adj <- 0.5
     
-    # Ticks every day
-    axis(1, at = days, labels = rep("", length(days)), las = 3, cex.axis = cexx, tck = tckk/2, lwd = 0, lwd.ticks = 1, pos = ylim[1])
+    if(axesLabels){
+      # Ticks every day
+      axis(1, at = days, labels = rep("", length(days)), las = 3, cex.axis = cexx, tck = tckk/2, lwd = 0, lwd.ticks = 1, pos = ylim[1])
     
     # Mid-month
-    axis(1, at = months + 14, labels = format(months + 14, format = dateFormat), las = 1, cex.axis = cexx, tck = tckk, lwd = 0, lwd.ticks = 1, pos = ylim[1])
+    axis(1, at = months + 14, labels = format(months + 14, format = dateFormat), las = 1, cex.axis = cexx2, tck = tckk, lwd = 0, lwd.ticks = 1, pos = ylim[1])
+    }
   }
   
   # Month ticks
-  axis(1, at = months, labels = format(months, format = dateFormat), las = 1, cex.axis = cexx, tck = tckk, lwd = 0, lwd.ticks = 1, pos = ylim[1])
+  if(axesLabels){
+    # With labels
+    axis(1, at = months, labels = format(months, format = dateFormat), las = 1, cex.axis = cexx2, tck = tckk, lwd = 0, lwd.ticks = 1, pos = ylim[1])
+    
+    axis(2, at = c(seq(0.1, 1, by = 0.1), seq(1.2, 3, by = 0.2)), tck = -.01, pos = as.Date(limPlot[1], origin = "1970-01-01"), cex.axis = cexx)
+
+  }
   
-  limPlot <- par("usr") # limits of the plot in user coordinates
-  axis(2, at = c(seq(0.1, 1, by = 0.1), seq(1.2, 3, by = 0.2)), tck = -.01, pos = as.Date(limPlot[1], origin = "1970-01-01"))
   
   #............................................
   # Define colors
@@ -185,15 +220,16 @@ plotRatio <- function(dates, vals, ylim = NA, colScale = colorScale){
   jcols <- cut(log(sliding.window(ratios7)), breaks = logvals, labels = FALSE)
   
   #...........................................
+  par(xpd = TRUE)
   # Sliding average
-  lines(dates, ratios7.slidingave, col = "black")
+  lines(dates, ratios7.slidingave, col = "black", cex = cex)
 
   # Plot points  
-  points(as.Date(dates), ratios7, col = colScale[icols], pch = 16)
+  points(as.Date(dates), ratios7, col = colScale[icols], pch = 16, cex = cex)
 
   # Just last point, bigger
-  points(dates[nend], ratios7[nend], col = colScale[icols[nend]], pch = 16, cex = 2)
-  
+  points(dates[nend], ratios7[nend], col = colScale[icols[nend]], pch = 16, cex = 2*cex)
+  par(xpd = FALSE)
   
 }
 
@@ -201,15 +237,27 @@ unique(datReg$reg)
 tmp <- datReg[datReg$reg == 11 & datReg$cl_age90 == 0 & datReg$jour >= "2021-12-25", ]
 head(tmp)
 
+par(new = FALSE)
+par(mar = c(4, 6, 3, 1))
 plotRatio(as.Date(tmp$jour), tmp$P)
+# text(as.Date(min(dates)), 0.7, "Les cas augmentent")
+# mtext("dd\n1.0\ndd", side = 2, line = 0, adj = c(1, 0.5))
+# axis(2, col = "red")
+
+
 
 ```
 
-```{r}
+```{r compareRegions, fig.width=9, fig.height=12}
+
+palH <- rev(met.brewer("Hiroshige", n = 101, type = "continuous"))
 
 plotRegion <- function(region){
-  tmp <- datReg[datReg$nom_region == region & datReg$cl_age90 == 0 & datReg$jour >= "2021-12-25", ]
-plotRatio(as.Date(tmp$jour), tmp$P)
+  tmp <- datReg[which(datReg$nom_region == region & datReg$cl_age90 == 0 & datReg$jour >= "2021-12-25"), ]
+  par(mgp = c(2.5, 0.5, 0), mar = c(4, 3, 3, 1))
+  plotRatio(as.Date(tmp$jour), tmp$P, ylim = c(0.35, 3), lightAxes = TRUE, colScale = palH
+)
+  title(main = region)
 }
 
 
@@ -219,11 +267,7 @@ par(las = 1)
 # 1 Plot legend (no)
 par(mar = c(0, 0, 0, 0))
 plot(0, 0, xlab = "", ylab = "", type = "n", axes = FALSE, xlim = c(-0.2, 1), ylim = c(-1, 0.5))
-legend(x = -0.15, y = 0, 
-         col = c(col452R, colAC, colD), 
-         pch = c(16, pchAC, pchD), 
-         legend = c("non-L452R", "non-E484K & non-L452R", "D1"), 
-         box.lwd = -1, cex = 1.2)
+
 
 # 2 HDF
 #layout(1)
@@ -235,7 +279,7 @@ plotRegion("Hauts-de-France")
 # 3 Plot credits
 par(mar = c(0, 0, 0, 0))
 plot(0, 0, xlab = "", ylab = "", type = "n", axes = FALSE, xlim = c(-0.1, 1), ylim = c(-1, 1))
-text(0, 0, paste0("@flodebarre, ", max(dat.France$date2, na.rm = TRUE) + 3, "
+text(0, 0, paste0("@flodebarre, ", Sys.Date(), "
 
 Data:
 https://www.data.gouv.fr/fr/datasets/
@@ -243,7 +287,7 @@ donnees-relatives-aux-resultats-des-
 tests-virologiques-covid-19/
 
 Code: https://github.com/flodebarre/
-nouveauCriblage/blob/main/scripts/mutations.Rmd
+covid_indicateurs/blob/main/phasePlots.Rmd
 "), adj = 0, cex = 0.6, family = "mono")
 
 par(mar = marplot)
@@ -252,7 +296,7 @@ par(mar = marplot)
 plotRegion("Normandie")
 
 # 5 IDF
-plotRegion("Ile-de-France")
+plotRegion("Île-de-France")
 
 # 6 GE
 plotRegion("Grand Est")
@@ -286,4 +330,199 @@ plotRegion("Corse")
 
 ```
 
+
+```{r eval = FALSE}
+layout(matrix(1:(12*15), nrow = 15))
+par(mar = c(0.1, 0.1, 0.1, 0.1), cex = 0.5)
+
+for(i in unique(datDep$dep)){
+    tmp <- datDep[which(datDep$dep == i & datDep$cl_age90 == 9 & datDep$jour >= "2021-12-25"), ]
+  par(mgp = c(1, 0.2, 0), mar = 0.5*c(0.5, 0.5, 1, 0.5))
+  plotRatio(as.Date(tmp$jour), tmp$P, ylim = c(0.35, 3), axesLabels = TRUE, cex = 0.9, lightAxes = TRUE)
+title(main = i)
+}
+
+```
+
+## Ratios Departements
+
+```{r compareDepartements, fig.height=12, fig.width=10}
+# TEST
+source("../data/layout_departements.R")
+
+
+
+layout(deps.indices, heights = heights.deps, widths = widths.deps)
+
+i <- 1
+for(i in geo.departements$index){
+  # dep <- geo.departements[i, "code_departement"]
+  # 
+  # tmp <- datDep[which(datDep$dep == dep & 
+  #                       datDep$cl_age90 == 0 & 
+  #                       datDep$jour >= "2021-12-25"), ]
+  par(mgp = c(2.5, 0.5, 0), mar = c(0, 0, 1, 0)+0.25)
+  plot(0)
+  #plotRatio(as.Date(tmp$jour), tmp$P, ylim = c(0.35, 3), axesLabels = FALSE, cex = 0.7, lightAxes = TRUE, colScale = palH)
+  title(main = geo.departements[i, "nom_departement"], cex.main = 0.8, col.main = par()$fg, font.main = 1)
+
+
+  }
+
+emptyplot <- function(){
+  plot(0, 0, type = "n", axes = FALSE, xlab = "", ylab = "")
+}
+
+## Ce sont des tests
+# Legend
+emptyplot()
+
+# Title
+emptyplot()
+text(0, 0, "bla")
+points(0, 0, col = "red")
+
+layout.show(104)
+for(i in 1:101){
+  plot(0, 0, type = "n")
+  text(0,0, i)
+}
+# Legend
+dep <- "75"
+ tmp <- datDep[which(datDep$dep == dep & 
+                         datDep$cl_age90 == 0 & 
+                         datDep$jour >= "2021-12-25"), ]
+  par(mgp = c(0.5, 0.1, 0), mar = c(0, 0, 1, 0))
+  plotRatio(as.Date(tmp$jour), tmp$P, ylim = c(0.35, 3), axesLabels = TRUE, cex = 0.7, lightAxes = TRUE, colScale = palH)
+    title(main = "Paris", cex.main = 0.8, col.main = par()$fg, font.main = 1)
+
+
+emptyplot()
+text(0, 0, "xx")
+text(0, 0, paste0("Ratios des cas d'une semaine à l'autre, ", minDate, " -- ", max(datDep$jour)), adj = 
+c(0.5, 0.5), cex = 1.5)
+
+
+emptyplot()
+  limPlot <- par("usr") # limits of the plot in user coordinates
+text(limPlot[1], 0, paste0("@flodebarre, ", Sys.Date(), "\n", 
+                  "Data: https://www.data.gouv.fr/fr/datasets/donnees-relatives-aux-resultats-des-tests-virologiques-covid-19/#
+Code: "), cex = 0.7, family = "mono", adj = c(0, 0.5), col = gray(0.4))
+
+```
+
+
+
+# Map departements
+
+```{r}
+# Load map 
+load("../data/mapFiles_withDepReg.RData")
+depsMetro <- geo.departements[1:96, "code_departement"]
+
+par(fg = "black", bg = "white")
+```
+
+```{r, eval = FALSE}
+minDate <- "2022-01-01"
+theageclass <- 0
+
+thedate <- "2022-03-03"
+ylim <- c(0.5, 3)
+
+palH <- rev(met.brewer("Hiroshige", n = 101, type = "continuous"))
+
+palH2 <- rev(met.brewer("Hiroshige", n = 13, type = "continuous"))
+maxVal <- ceiling(max(abs(log(ylim)))*10)/10 # max value for the scale
+logvals <- seq(-maxVal, maxVal, length.out = length(palH))
+vals2 <- round(exp(seq(-maxVal, maxVal, length.out = length(palH2))), 2)
+
+for(thedate in seq(as.Date(minDate), as.Date(max(datDep$jour)), by = "day")){
+  if(!any(is.element(c(thedate, as.Date(thedate, origin = "1970-01-01") - 7), as.Date(feries$date)))){
+
+    thedate <- as.Date(thedate, origin = "1970-01-01")
+  cat(thedate)
+    
+    fname <- paste0("pics/Ratio7Dep_", thedate, "_clage-", theageclass, ".png")
+  
+mf_export(x = mdeps.metro, export = "png", 
+          filename = fname, width = 850, height = 800,
+          res = 90
+            )
+
+
+
+tmp1 <- datDep[datDep$jour == thedate & datDep$cl_age90 == 0 & is.element(datDep$dep, depsMetro), ]
+tmp2 <- datDep[datDep$jour == as.character(as.Date(thedate) - 7) & datDep$cl_age90 == 0 & is.element(datDep$dep, depsMetro), ]
+
+tmp1 <- tmp1[order(tmp1$dep), c("dep", "P")]
+tmp2 <- tmp2[order(tmp2$dep), c("dep", "P")]
+
+tmp1$ratio7 <- tmp1$P / tmp2$P
+tmp <- merge(mdeps, tmp1, by.y = "dep", by.x = "code_insee")
+tmp$logratio7 <- log(tmp$ratio7)
+
+
+layout(1)
+mf_theme(bg = par()$bg)
+mf_init(tmp, expandBB = c(0.05, 0, 0.125, -0.2))
+mf_map(tmp, var = "logratio7",
+       type = "choro", breaks = logvals, pal = palH, leg_pos = "n", add = TRUE)
+
+mf_legend_c(pos = "left", val = vals2, pal = palH2, title = "Ratio du nombre de cas \nd'une semaine à l'autre\n(échelle log)")
+
+mf_map(mregions, add = TRUE, col = gray(0, 0), lwd = 1)
+mf_title(txt = paste0("Ratio du nombre de cas d'une semaine à l'autre, au ", format(as.Date(thedate), "%d/%m/%Y")), bg = par()$bg, fg = par()$fg, cex = 1.5)
+
+
+mf_credits(paste0("@flodebarre, ", Sys.Date(), "\n", 
+                  "Données cas : https://www.data.gouv.fr/fr/datasets/donnees-relatives-aux-resultats-des-tests-virologiques-covid-19/#\n",
+                  "Fond de carte : © les contributeurs d'OpenStreetMap sous licence ODbL. Carte réalisée avec le package ",
+                  "mapsf ",
+                  packageVersion("mapsf")), cex = 0.8)
+
+
+
+mar.inset <- c(0, 0, 0.8, 0) # Margins of the inset
+line.title.2 <- 0.2 # Line position of the inset titles, communes
+
+# Petite couronne
+mf_inset_on(fig = c(0.825, 0.95, 0.8, 0.95) - 0.05 * c(0, 0, 1, 1))
+tmpP <- tmp[is.element(tmp$code_insee, c("75", "92", "93", "94")),]
+mf_theme(mar = mar.inset)
+mf_init(tmpP, expandBB = c(0, 0, 0, 0))
+mf_map(tmpP, var = "logratio7", type = "choro", breaks = logvals, pal = palH, leg_pos = "n", add = TRUE)
+mf_title("Petite couronne", tab = TRUE, inner = FALSE, line = 0.5, cex = 0.8, bg = gray(0, 0), fg = par()$fg)
+box()
+mf_inset_off()
+
+mf_inset_on(fig = c(0, 0.35, 0.725, 0.98))
+subFra <- datFra[which(datFra$jour >= as.Date(minDate) - 7 & datFra$cl_age90 == theageclass & datFra$jour <= thedate), c("jour", "P")]
+par(mar = c(2, 2, 1, 0.5), cex.lab = 0.7, mgp = c(3, 0.25, 0))
+plotRatio(as.Date(subFra$jour), subFra$P, colScale = palH, xlim = c(as.Date(minDate), Sys.Date() - 3), ylim = ylim)
+title("France entière", font.main = 1, cex.main = 1)
+cext <- 0.75
+colt <- gray(0.5)
+text(as.Date(minDate), y = 0.6, labels = "Le nb de cas diminue", cex = cext, adj = c(0, 0.5), col = colt)
+text(as.Date(minDate), y = 2.6, labels = "Le nb de cas augmente", cex = cext, adj = c(0, 0.5), col = colt)
+mf_inset_off()
+
+dev.off()
+} # end if ferie
+} # end loop date
+
+# system(paste0("open ", fname))
+
+# Copy the last one to freeze the gif
+for(icopy in 1:10){
+  system(paste0("cp ", substr(fname, 1, nchar(fname) - 4), "_", icopy, ".png"))
+}
+
+# Convert into movie
+system("rm pics/mapRatio7Dep.mp4")
+system(paste0("ffmpeg -pattern_type glob -i 'pics/Ratio7Dep_", "*", ".png' -vcodec libx264 -s 850x800 -pix_fmt yuv420p -filter:v 'setpts=8.0*PTS' pics/mapRatio7Dep.mp4"))
+
+
+
+```
 
