@@ -552,6 +552,8 @@ system(paste0("ffmpeg -pattern_type glob -i 'pics/Ratio7Dep_", "*", ".png' -vcod
 
 # Phase plot
 
+## Departements
+
 ```{r}
 minDate <- "2022-01-01"
 agCl <- 0
@@ -559,78 +561,105 @@ agCl <- 0
 tmpDep <- datDep[which(datDep$jour >= as.Date(minDate) - 14 & datDep$cl_age90 == agCl), ]
 ```
 
-```{r}
-layout(matrix(1:2, ncol = 2), widths = c(5, 1.5))
+```{r phasePlotDep, fig.width=10.66, fig.height=6}
 
-par(mar = c(6, 4, 2, 0), las = 1, mgp = c(2.5, 0.5, 0), tck = -0.01, bg = gray(1))
-# Initialize plot
-plot(1, type = "n", xlim = c(100, 5000), ylim = c(0.4, 4), log = "xy", 
-     xlab = "7-day incidence per 100'000 inhabitants", ylab = "week-to-week ratio of 7-day incidence")
-abline(h = 1, lwd = 2)
-limPlot <- par("usr")
+endDates <- seq(as.Date(minDate), as.Date(max(tmpDep$jour)), by = "day")
 
-
-mtext(side = 1, text = paste0("@flodebarre, ", Sys.Date(), ", inspired by @trvrb, @BristOliver, @VictimOfMaths
+plotPhaseDep0 <- function(idate){
+  endDate <- endDates[idate]
+  
+  tmpp <- tmpDep[tmpDep$jour <= endDate, ]
+  
+  fname <- paste0("pics/phaseDep_", formatC(idate, width=3, flag="0"), ".png")
+  png(fname, width = 10.6, height = 6, units = "in", res = 300)
+  layout(matrix(1:2, ncol = 2), widths = c(5, 1.5))
+  
+  par(mar = c(6, 4, 2, 0), las = 1, mgp = c(2.5, 0.5, 0), tck = -0.01, bg = gray(1))
+  # Initialize plot
+  plot(1, type = "n", xlim = c(100, 5000), ylim = c(0.4, 4), log = "xy", 
+       xlab = "7-day incidence per 100'000 inhabitants", ylab = "week-to-week ratio of 7-day incidence")
+  abline(h = 1, lwd = 2)
+  limPlot <- par("usr")
+  
+  
+  mtext(side = 1, text = paste0("@flodebarre, ", Sys.Date(), ", inspired by @trvrb, @BristOliver, @VictimOfMaths
 Data: https://www.data.gouv.fr/fr/datasets/donnees-relatives-aux-resultats-des-tests-virologiques-covid-19/
-Code: https://github.com/flodebarre/nouveauCriblage/blob/main/scripts/trevorplots.Rmd
+Code: https://github.com/flodebarre/covid_indicateurs/blob/main/phasePlots.Rmd
 "), adj = 0, cex = 0.5, family = "mono", line = 5.5, col = gray(0.4))
+  
+  
+  for(i in geo.departements$code_departement[nchar(geo.departements$code_departement) < 3]){
+    reg <- geo.departements[geo.departements$code_departement == i, "nom_region"]
+    
+    # Subset of the data for this dep
+    sub <- tmpDep[which(tmpp$dep == i), ]
+    
+    stopifnot(all(diff(as.Date(sub$jour)) == 1))
+    
+    iferie <- which(is.element(sub$jour, feries$date))
+    sub[iferie, "P"] <- NA
+    
+    # Index of the final line
+    nend <- length(sub$P)
+    ratios7 <- rep(NA, nend) # Initialize output
+    # Ratios
+    ratios7[8:nend] <- sub$P[8:nend] / sub$P[1:(nend - 7)]
+    
+    
+    sum7 <- sliding.window(sub$P, pos = 7, FUN = sum)
+    incid7 <- sum7 / sub$pop * 10^5
+    
+    ratioIncid7 <- rep(NA, nend)
+    ratioIncid7[8:nend] <- incid7[8:nend] / incid7[1:(nend - 7)]
+    
+    
+    inna <- which(!is.na(incid7) & !is.na(ratios7))
+    
+    #lines(incid7[inna], ratios7[inna], col = "red", type = "l")
+    lines(incid7[inna], ratioIncid7[inna], col = colReg[reg], type = "l")
+    
+    points(x = incid7[nend], y = ratioIncid7[nend], col = colReg[reg], cex = 2, pch = 16)
+    
+    text(x = incid7[nend], y = ratioIncid7[nend], col = "white", cex = 0.45, labels = i, adj = c(0.5, 0.5))
+    
+    
+  }
+  
+  title(main = paste0("Covid-19 cases by départements, France, ", sub$jour[nend]))
+  colT <- gray(0.5)
+  text(x = 10^(limPlot[1]), y = 10^(limPlot[3]), adj = c(-0.1, -1), labels = "Cases decrease ←", col = colT)
+  text(x = 10^(limPlot[1]), y = 10^(limPlot[4]), adj = c(-0.1, 2), labels = "Cases increase →", col = colT)
+  
+  #..........................
+  xlm <- c(-0.1, 2)
+  
+  par(mar = c(4, 0, 4, 0))
+  dy <- 6
+  plot(0, type = "n", axes = FALSE, xlab = "", ylab = "", xlim = xlm, ylim = c(1 - dy, length(colReg)+dy))
+  
+  i <- 1
+  nomsregs <- names(colReg)
+  for(reg in nomsregs){
+    text(x = 0, y = length(nomsregs) - i + 1, labels = reg, col = colReg[reg], adj = c(0, 0.5), cex = 0.8)
+    i <- i + 1
+  }
+  dev.off()
+  
+}
 
-
-for(i in geo.departements$code_departement[nchar(geo.departements$code_departement) < 3]){
-  reg <- geo.departements[geo.departements$code_departement == i, "nom_region"]
-  
-  # Subset of the data for this dep
-  sub <- tmpDep[which(tmpDep$dep == i), ]
-  
-  stopifnot(all(diff(as.Date(sub$jour)) == 1))
-  
-  iferie <- which(is.element(sub$jour, feries$date))
-  sub[iferie, "P"] <- NA
-  
-  # Index of the final line
-  nend <- length(sub$P)
-  ratios7 <- rep(NA, nend) # Initialize output
-  # Ratios
-  ratios7[8:nend] <- sub$P[8:nend] / sub$P[1:(nend - 7)]
-  
-
-  sum7 <- sliding.window(sub$P, pos = 7, FUN = sum)
-  incid7 <- sum7 / sub$pop * 10^5
-
-  ratioIncid7 <- rep(NA, nend)
-  ratioIncid7[8:nend] <- incid7[8:nend] / incid7[1:(nend - 7)]
-  
-  
-  inna <- which(!is.na(incid7) & !is.na(ratios7))
-  
-  #lines(incid7[inna], ratios7[inna], col = "red", type = "l")
-  lines(incid7[inna], ratioIncid7[inna], col = colReg[reg], type = "l")
-  
+length(endDates)
+for(i in seq_along(endDates)){
   print(i)
-  
-  text(x = incid7[nend], y = ratioIncid7[nend], col = colReg[reg], cex = 0.45, labels = i, adj = c(0.5, -0.5))
-  
-
+  plotPhaseDep0(i)
 }
 
-title(main = "Phase plot of Covid-19 cases by départements, France")
-colT <- gray(0.5)
-text(x = 10^(limPlot[1]), y = 10^(limPlot[3]), adj = c(-0.1, -1), labels = "Cases decrease", col = colT)
-text(x = 10^(limPlot[1]), y = 10^(limPlot[4]), adj = c(-0.1, 2), labels = "Cases increase", col = colT)
 
-#..........................
-xlm <- c(-0.1, 2)
+# Convert into movie
+system("rm pics/mapPhasePlotDep.mp4")
+system(paste0("ffmpeg -pattern_type glob -i 'pics/phaseDep_", "*", ".png' -vcodec libx264 -s 800x450 -pix_fmt yuv420p -filter:v 'setpts=8.0*PTS' pics/mapPhasePlotDep.mp4"))
 
-par(mar = c(4, 0, 4, 0))
-dy <- 6
-plot(0, type = "n", axes = FALSE, xlab = "", ylab = "", xlim = xlm, ylim = c(1 - dy, length(colReg)+dy))
 
-i <- 1
-nomsregs <- names(colReg)
-for(reg in nomsregs){
-  text(x = 0, y = length(nomsregs) - i + 1, labels = reg, col = colReg[reg], adj = c(0, 0.5), cex = 0.8)
-  i <- i + 1
-}
-
+#system(paste0("open ", fname))
 ```
+
 
