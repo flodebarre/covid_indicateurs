@@ -180,7 +180,7 @@ for(ctr in ctrs){
     cases <- sC$cases / sC$popData2020 * 10^5
   }
 
-  plotPhase(times, cases, cols[ctr])
+  plotPhase(times, cases, cols[ctr], incidRatio = TRUE)
   
 }
 
@@ -385,47 +385,82 @@ datCountries <- merge(days, datCountries, by = "date", all.x = TRUE)
 minDate <- "2021-12-15"
 maxDate <- "2022-03-09"
 
+days <- seq(as.Date(minDate), as.Date(maxDate), by = "days")
+
+
 ctrs <- c("France", "Italy", "Belgium", "Portugal", "Spain")
 cols <- met.brewer(name = "Isfahan2", n = length(ctrs), type = "discrete")
 names(cols) <- ctrs
 
-# Initialize plot window
-layout(matrix(1:2, nrow = 2), heights = c(6, 1))
-par(mar = c(4, 4, 2, 0.2), mgp = c(2, 0.5, 0), tck = -0.01, 
-    las = 1)
-plot(1, type = "n", log = "xy", xlim = c(100, 5000), ylim = c(1/2, 3), 
-     xlab = "", ylab = "", main = paste0("Phase plots of Covid-19 cases, ", minDate, " -- ", maxDate))
-abline(h = 1)
-mtext(side = 1, text = "7-d incidence per 100'000 inhabitants", line = 2)
-mtext(side = 2, 
-      text = "Week-to-week ratio of incidence", #"Week-to-week ratio of daily cases (7-d averaged)", 
-      las = 3, line = 2)
-# subset in the chosen dates
-
 # Subselect the dates already
-dC <- datCountries[which(datCountries$date >= minDate & datCountries$date <= maxDate), ]
+dC <- datCountries[which(datCountries$date >= as.Date(minDate) - 14 & datCountries$date <= maxDate), ]
 
-for(j in ctrs){
-  # Get the country specific dataset
-  dat <- dC[dC$country == j, ]
-  
-  times <- dat$date
-  cases <- dat$cases / dat$pop * 10^5
-  
-  # Check missing dates
-  stopifnot(all(diff(times) == 1))
-  
-  pP <- plotPhase(times, cases, adjustcolor(cols[j], 0.7), incidRatio = TRUE)
-  
-  nend <- length(times)
-  # Add point at the last point
-  points(pP$incid7[nend], pP$incid.ratios7[nend], col = cols[j], pch = 16, cex = 2)
-}  
-legend("topleft", inset = c(0.01, 0.01), col = cols, legend = names(cols), pch = 16, pt.cex = 1.5, box.lwd = 0)
 
-par(mar = c(2.1, 2, 0, 0.1))
-plot(0, type = "n", axes = T, xlab = "", ylab = "", xlim = c(0, 1), ylim = c(0, 1))
-text(x = 0, y = 0.5, adj = c(0, 0.5), 
-     labels = paste0("Data sources: \nFrance: ", URL.FRA, "\nItaly: ", URL.ITA, "\nBelgium: ", URL.BEL, "\nPortugal: ", URL.PRT, "\nSpain: ", URL.Spain, "\nCode: "), cex = 0.5, col = gray(0.5), family = "mono")
+plotFIPS <- function(iDate, openPlot = FALSE){
+  endDate <- days[iDate]
+  fname <- paste0("pics/phaseCountries_", endDate, ".png")
+  png(fname, 
+      width = 8, height = 6, units = "in", res = 300)
+  # Initialize plot window
+  layout(matrix(1:2, nrow = 2), heights = c(6, 1))
+  par(mar = c(4, 4, 2, 0.2), mgp = c(2, 0.5, 0), tck = -0.01, 
+      las = 1)
+  plot(1, type = "n", log = "xy", xlim = c(100, 5000), ylim = c(1/2, 3), 
+       xlab = "", ylab = "", main = paste0("Phase plots of Covid-19 cases, ", minDate, " -- ", endDate))
+  abline(h = 1)
+  mtext(side = 1, text = "7-d incidence per 100'000 inhabitants", line = 2)
+  mtext(side = 2, 
+        text = "Week-to-week ratio of incidence", #"Week-to-week ratio of daily cases (7-d averaged)", 
+        las = 3, line = 2)
+  # subset in the chosen dates
+  
+  
+  for(j in ctrs){
+    # Get the country specific dataset until the date
+    dat <- dC[dC$country == j & dC$date <= endDate, ]
+    
+    times <- dat$date
+    cases <- dat$cases / dat$pop * 10^5
+    
+    # Check missing dates
+    stopifnot(all(diff(times) == 1))
+    
+    pP <- plotPhase(times, cases, adjustcolor(cols[j], 0.7), incidRatio = TRUE)
+    
+    nend <- length(times)
+    # Add point at the last point
+    points(pP$incid7[nend], pP$incid.ratios7[nend], col = cols[j], pch = 16, cex = 2)
+    # Add country letter
+    text(pP$incid7[nend], pP$incid.ratios7[nend], labels = substr(j, 1, 1), col = "white", cex = 0.7)
+  }  
+  legend("topleft", inset = c(0.01, 0.01), col = cols, legend = names(cols), pch = 16, pt.cex = 1.5, box.lwd = 0)
+  
+  par(mar = c(0.1, 2, 0, 0.5))
+  plot(0, type = "n", axes = FALSE, xlab = "", ylab = "", xlim = c(0, 1), ylim = c(0, 1))
+  text(x = 0, y = 0.5, adj = c(0, 0.5), 
+       labels = paste0("@flodebarre, ", Sys.Date(), "\n", 
+                       "France data:   ", URL.FRA, "\n",  
+                       "Italy data:    ", URL.ITA, "\n", 
+                       "Belgium data:  ", URL.BEL, "\n", 
+                       "Portugal data: ", URL.PRT, "\n", 
+                       "Spain data:    ", URL.Spain, "\n", 
+                       "Code: https://github.com/flodebarre/covid_indicateurs/blob/main/2022-03_ComparisonEurope.Rmd"), cex = 0.5, col = gray(0.5), family = "mono")
+  
+  dev.off()
+  if(openPlot) system(paste0("open ", fname))  
+}
+
+plotFIPS(7, openPlot = TRUE)
+
+system("rm pics/phaseCountries_*png")
+for(k in seq_along(days)[-(1:6)]){
+  plotFIPS(k)
+}
+
+
+# Convert into movie
+system("rm pics/phasePlotFIPBS.mp4")
+system(paste0("ffmpeg -pattern_type glob -i 'pics/phaseCountries_", "*", ".png' -vcodec libx264 -s 800x600 -pix_fmt yuv420p -filter:v 'setpts=8.0*PTS' pics/phasePlotFIPBS.mp4"))
+system("open pics/phasePlotFIPBS.mp4")
 ```
 
