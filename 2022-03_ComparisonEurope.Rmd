@@ -1,0 +1,431 @@
+---
+title: "EuropeComparison"
+author: "FD"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library("MetBrewer")
+
+source("usefulFunctions.R")
+dlData <- TRUE
+```
+
+# With JHU data
+
+## Data
+
+```{r}
+## Download data
+URL <- "https://raw.githubusercontent.com/owid/covid-19-data/master/public/data/owid-covid-data.csv"
+# Source: https://github.com/owid/covid-19-data/blob/master/public/data/owid-covid-data.csv
+# JHU data through OWiD
+
+filename <- "data/cases_world.csv"
+
+if(dlData){
+  download.file(URL, filename)
+  
+  system(paste0("git add ", filename))
+  system("git commit -m 'update world data'")
+}
+
+## Load data
+datJHU <- read.csv(filename)
+head(datJHU)
+
+datJHU.Europe <- datJHU[datJHU$continent == "Europe", ]
+names(datJHU.Europe)
+
+dico <- cbind(unique(datJHU.Europe$iso_code), unique(datJHU.Europe$location))
+dicoCtr <- dico[, 2]
+names(dicoCtr) <- dico[, 1]
+```
+
+## Plot
+
+```{r}
+# Define colors
+ctrs <- sort(c("BEL", "DNK", "FRA", "DEU", "FIN", "PRT", "CHE", "GBR", "NLD", "IRL", "ESP", "SWE", "NOR"))
+ctrs <- sort(c("PRT", "BEL", "FRA"))
+cols <- met.brewer("Signac", n = length(ctrs), type = "discrete")
+names(cols) <- ctrs
+
+# Initialize plot window 
+plot(1, type = "n", 
+     xlim = c(50, 5000), 
+     ylim = c(0.3, 3), 
+     log = "xy")
+
+minDate <- "2022-01-01"
+isoctr <- "FRA"
+
+for(isoctr in ctrs){
+  subCountry <- datJHU[datJHU$iso_code == isoctr, ]
+  subCountry <- subCountry[subCountry$date >= minDate, ]
+  head(subCountry)
+  
+  # smoothed: 7-day window at the end of the interval
+  #plot(as.Date(subCountry$date), subCountry$new_cases_smoothed_per_million)
+  #points(as.Date(subCountry$date), sliding.window(subCountry$new_cases_per_million, pos = 7), col = 2)
+  
+  # Check that dates are consecutive
+  all(diff(as.Date(subCountry$date)) == 1)
+  
+  # Compute 7-day sums
+  s7 <- sliding.window(subCountry$new_cases_per_million, winwdt = 7, pos = 7, FUN = sum)
+  nend <- length(s7)
+  caseratios7 <- ratios7 <- rep(NA, nend) # Initialize output
+  
+  ratios7[8:nend] <- s7[8:nend] / s7[1:(nend - 7)] # Week-to-week ratios of incidence
+  caseratios7[8:nend] <- subCountry$new_cases_per_million[8:nend] / subCountry$new_cases_per_million[1:(nend - 7)] # Week-to-week ratios of cases
+  
+ # plot(s7 / 10, sliding.window(ratios7, pos = 7), pch = 16, col = cols[isoctr], type = "o", main = isoctr)
+  #points(s7 / 10, sliding.window(ratios7, pos = 7), pch = 16, col = cols[isoctr], type = "o")
+#  points(s7 / 10, ratios7, pch = 16, col = cols[isoctr], type = "o")
+  points(s7 / 10, sliding.window(caseratios7, pos = 7), pch = 16, col = cols[isoctr], type = "o")
+}
+legend("topleft", col = cols, legend = names(cols), pch = 16, box.lwd = 0)
+```
+
+# With ECDC data
+
+## Data
+```{r}
+URL.ECDC <- "https://opendata.ecdc.europa.eu/covid19/nationalcasedeath_eueea_daily_ei/csv/data.csv"
+# Source: https://www.ecdc.europa.eu/en/publications-data/data-daily-new-cases-covid-19-eueea-country
+
+fname <- "data/cases_ECDC.csv"
+
+if(dlData){
+  download.file(URL.ECDC, fname)
+}
+
+datECDC <- read.csv(fname)
+
+head(datECDC)
+
+datECDC$date <- as.Date(datECDC$dateRep, format = "%d/%m/%Y")
+
+sort(unique(datECDC$countriesAndTerritories))
+
+
+# Sort by date
+datECDC <- datECDC[order(datECDC$countriesAndTerritories, datECDC$date), ]
+```
+
+
+## Plot
+
+
+
+```{r}
+plotPhase <- function(times, cases, col, incidRatio = FALSE){
+  
+  # Compute 7-day sums
+  incid7 <- 7 * sliding.window(cases, pos = 7, FUN = mean, na.rm = TRUE)
+  nend <- length(incid7)  
+  
+  # Compute week to week ratios
+  cases.ratios7 <- incid.ratios7 <- rep(NA, nend)
+  cases.ratios7[8:nend] <- cases[8:nend] / cases[1:(nend - 7)]
+  incid.ratios7[8:nend] <- incid7[8:nend] / incid7[1:(nend - 7)]
+  
+  if(incidRatio){
+    points(incid7, incid.ratios7, type = "l", lwd = 2, col = col)
+  }else{
+    points(incid7, sliding.window(cases.ratios7, pos = 7), type = "l", lwd = 2, col = col)
+  }
+  
+  list(incid7 = incid7, 
+       cases.ratios7.ave = sliding.window(cases.ratios7, pos = 7),
+       incid.ratios7 = incid.ratios7
+       )
+}
+```
+
+
+```{r}
+# Define colors
+ctrs <- sort(unique(datECDC$countriesAndTerritories))
+cols <- met.brewer("Renoir", n = length(ctrs), type = "continuous")
+names(cols) <- ctrs
+
+
+layout(matrix(c(1:length(ctrs)), ncol = 5, byrow = TRUE))
+
+minDate <- "2021-12-15"
+maxDate <- Sys.Date() - 4
+
+for(ctr in ctrs){
+  subCountry <- datECDC[which(datECDC$countriesAndTerritories == ctr), ]
+  subCountry <- subCountry[subCountry$date >= minDate & subCountry$date <= maxDate, ]
+  
+  # Initialize plot
+  par(mar = c(2, 2, 1, 0.2), mgp = c(2, 0.25, 0), tck = -0.02)
+  plot(1, type = "n", log = "xy", xlim = c(100, 5000), ylim = c(0.22, 4.2), 
+       xlab = "", ylab = "", main = ctr)
+  abline(h = 1)
+
+  times <- subCountry$date
+  cases <- subCountry$cases / subCountry$popData2020 * 10^5
+  
+  # Check missing dates
+    # If missing dates, add them
+  if(!all(diff(times) == 1)){
+    sC <- merge(data.frame(date = seq(min(as.Date(times)), max(as.Date(times)), by = "day")), subCountry, by = "date", all.x = TRUE)
+    times <- sC$date
+    cases <- sC$cases / sC$popData2020 * 10^5
+  }
+
+  plotPhase(times, cases, cols[ctr])
+  
+}
+
+#for(i in dev.list())dev.off()
+#legend("topleft", col = cols, legend = names(cols), pch = 16, box.lwd = 0)
+```
+
+## Specific countries
+
+```{r}
+layout(1)
+# Initialize plot window 
+par(las = 1)
+par(mar = c(4, 4, 2, 0.5), mgp = c(2.5, 0.5, 0), tck = -0.01)
+plot(1, type = "n",
+     xlim = c(50, 5000),
+     ylim = c(0.3, 3),
+     log = "xy",
+     xlab = "7-day incidence per 100'000 inhabitants",
+     ylab = "week-to-week case ratio (7-d averaged)")
+abline(h = 1)
+
+# Define colors
+ctrs <- c("France", "Portugal", "Belgium", "Spain", "Italy")
+cols <- met.brewer("Isfahan1", n = length(ctrs), type = "discrete")
+names(cols) <- ctrs
+
+
+minDate <- "2021-12-01"
+maxDate <- Sys.Date() - 4
+
+tmp <- datECDC[datECDC$date >= minDate & datECDC$date <= maxDate, ]
+
+for(ctr in ctrs){
+  subCountry <- tmp[which(tmp$countriesAndTerritories == ctr), ]
+  times <- subCountry$date
+  cases <- subCountry$cases / subCountry$popData2020 * 10^5
+  
+    # If missing dates, add them
+  if(!all(diff(times) == 1)){
+    sC <- merge(data.frame(date = seq(min(as.Date(times)), max(as.Date(times)), by = "day")), subCountry, by = "date", all.x = TRUE)
+    times <- sC$date
+    cases <- sC$cases / sC$popData2020 * 10^5
+  }
+
+  plotPhase(times, 
+            cases, 
+            cols[ctr])
+  
+}
+legend("topleft", col = cols, legend = names(cols), pch = 16, box.lwd = 0)
+
+```
+
+# With country-specific data
+
+## Data Portugal
+```{r loadDataPRT, results='hide'}
+URL.PRT <- "https://raw.githubusercontent.com/dssg-pt/covid19pt-data/master/data.csv"
+
+filePRT <- "data/cases_PRT.csv"
+if(dlData){
+  download.file(URL.PRT, filePRT)
+}
+
+datPRT <- read.csv(filePRT)
+head(datPRT)
+
+datPRT <- datPRT[, c("data", "confirmados_novos")]
+names(datPRT) <- c("date", "cases")
+
+datPRT$date <- as.Date(datPRT$date, format = "%d-%m-%Y")
+
+#layout(1)
+#plot(datPRT$date, datPRT$cases)
+
+```
+
+## Data Belgium
+```{r loadDataBEL, results='hide'}
+URL.BEL <- "https://epistat.sciensano.be/Data/COVID19BE_CASES_AGESEX.csv"
+
+fileBEL <- "data/cases_BEL.csv"
+if(dlData){
+  download.file(URL.BEL, fileBEL)
+}
+
+datBEL <- read.csv(fileBEL)
+
+agg <- aggregate(datBEL$CASES, by = list(date = datBEL$DATE), FUN = sum)
+datBEL <- agg
+names(datBEL)[2] <- "cases"
+
+pop <- unique(datECDC[datECDC$countriesAndTerritories == "Belgium", "popData2020"])
+times <- datBEL$date[datBEL$date >= minDate]
+cases <- datBEL$cases[datBEL$date >= minDate] / pop * 10^5
+
+plotPhase(times, cases, col = "red")
+```
+
+## Data France
+
+```{r loadDataFRA, results='hide'}
+URL.FRA <- "https://www.data.gouv.fr/fr/datasets/r/dd0de5d9-b5a5-4503-930a-7b08dc0adc7c"
+# Source: https://www.data.gouv.fr/en/datasets/donnees-relatives-aux-resultats-des-tests-virologiques-covid-19/
+
+fname <- "data/cases_FRA.csv"
+if(dlData){
+  download.file(URL.FRA, fname)
+}
+
+datFRA <- read.csv(fname, sep = ";")
+datFRA <- datFRA[datFRA$cl_age90 == 0, ]
+
+datFRA$date <- as.Date(datFRA$jour)
+datFRA$cases <- datFRA$P
+
+
+ii <- which(datFRA$date >= minDate)
+times <- datFRA$date[ii]
+cases <- datFRA$cases[ii] / datFRA$pop[ii] * 10^5
+
+plotPhase(times, cases, col = "green")
+
+
+```
+
+## Data Italy
+```{r}
+URL.ITA <- "https://raw.githubusercontent.com/pcm-dpc/COVID-19/master/dati-andamento-nazionale/dpc-covid19-ita-andamento-nazionale.csv"
+# Source: https://github.com/pcm-dpc/COVID-19/tree/master/dati-andamento-nazionale
+
+fname <- "data/cases_Italy.csv"
+
+if(dlData){
+  download.file(URL.ITA, fname)
+}
+datITA <- read.csv(file = fname)
+head(datITA)
+
+datITA$date <- as.Date(datITA$data)
+datITA$cases <- datITA$nuovi_positivi
+
+
+```
+
+## Data Spain
+```{r}
+URL.Spain <- "https://cnecovid.isciii.es/covid19/resources/casos_tecnica_provincia.csv"
+
+fname <- "data/cases_Spain.csv"
+if(dlData){
+  download.file(URL.Spain, fname)
+}
+datESP <- read.csv(file = fname)
+head(datESP)
+
+agg <- aggregate(datESP$num_casos, by = list(date = datESP$fecha), FUN = sum)
+agg$date <- as.Date(agg$date)
+
+datESP <- agg
+names(datESP)[2] <- "cases"
+
+```
+
+## Group them together
+
+```{r}
+datFRA$country <- "France"
+datESP$country <- "Spain"
+datBEL$country <- "Belgium"
+datPRT$country <- "Portugal"
+datITA$country <- "Italy"
+
+datESP$pop <- unique(datECDC[datECDC$countriesAndTerritories == "Spain", "popData2020"])
+datBEL$pop <- unique(datECDC[datECDC$countriesAndTerritories == "Belgium", "popData2020"])
+datPRT$pop <- unique(datECDC[datECDC$countriesAndTerritories == "Portugal", "popData2020"])
+datITA$pop <- unique(datECDC[datECDC$countriesAndTerritories == "Italy", "popData2020"])
+
+columns <- c("date", "cases", "country", "pop")
+datCountries <- do.call("rbind", list(datFRA[, columns], 
+                                      datESP[, columns], 
+                                      datBEL[, columns], 
+                                      datPRT[, columns], 
+                                      datITA[, columns]))
+
+
+# Make sure all dates are present
+range(datCountries$date)
+days <- data.frame(date = seq(min(datCountries$date), max(datCountries$date), by = "day"))
+
+datCountries <- merge(days, datCountries, by = "date", all.x = TRUE)
+
+
+
+```
+
+
+## Plot together
+
+```{r}
+minDate <- "2021-12-15"
+maxDate <- "2022-03-09"
+
+ctrs <- c("France", "Italy", "Belgium", "Portugal", "Spain")
+cols <- met.brewer(name = "Isfahan2", n = length(ctrs), type = "discrete")
+names(cols) <- ctrs
+
+# Initialize plot window
+layout(matrix(1:2, nrow = 2), heights = c(6, 1))
+par(mar = c(4, 4, 2, 0.2), mgp = c(2, 0.5, 0), tck = -0.01, 
+    las = 1)
+plot(1, type = "n", log = "xy", xlim = c(100, 5000), ylim = c(1/2, 3), 
+     xlab = "", ylab = "", main = paste0("Phase plots of Covid-19 cases, ", minDate, " -- ", maxDate))
+abline(h = 1)
+mtext(side = 1, text = "7-d incidence per 100'000 inhabitants", line = 2)
+mtext(side = 2, 
+      text = "Week-to-week ratio of incidence", #"Week-to-week ratio of daily cases (7-d averaged)", 
+      las = 3, line = 2)
+# subset in the chosen dates
+
+# Subselect the dates already
+dC <- datCountries[which(datCountries$date >= minDate & datCountries$date <= maxDate), ]
+
+for(j in ctrs){
+  # Get the country specific dataset
+  dat <- dC[dC$country == j, ]
+  
+  times <- dat$date
+  cases <- dat$cases / dat$pop * 10^5
+  
+  # Check missing dates
+  stopifnot(all(diff(times) == 1))
+  
+  pP <- plotPhase(times, cases, adjustcolor(cols[j], 0.7), incidRatio = TRUE)
+  
+  nend <- length(times)
+  # Add point at the last point
+  points(pP$incid7[nend], pP$incid.ratios7[nend], col = cols[j], pch = 16, cex = 2)
+}  
+legend("topleft", inset = c(0.01, 0.01), col = cols, legend = names(cols), pch = 16, pt.cex = 1.5, box.lwd = 0)
+
+par(mar = c(2.1, 2, 0, 0.1))
+plot(0, type = "n", axes = T, xlab = "", ylab = "", xlim = c(0, 1), ylim = c(0, 1))
+text(x = 0, y = 0.5, adj = c(0, 0.5), 
+     labels = paste0("Data sources: \nFrance: ", URL.FRA, "\nItaly: ", URL.ITA, "\nBelgium: ", URL.BEL, "\nPortugal: ", URL.PRT, "\nSpain: ", URL.Spain, "\nCode: "), cex = 0.5, col = gray(0.5), family = "mono")
+```
+
