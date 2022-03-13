@@ -117,9 +117,7 @@ datECDC <- datECDC[order(datECDC$countriesAndTerritories, datECDC$date), ]
 ```
 
 
-## Plot
-
-
+## Plot function
 
 ```{r}
 plotPhase <- function(times, cases, col, incidRatio = FALSE){
@@ -146,46 +144,109 @@ plotPhase <- function(times, cases, col, incidRatio = FALSE){
 }
 ```
 
+## Plot
 
 ```{r}
 # Define colors
 ctrs <- sort(unique(datECDC$countriesAndTerritories))
-cols <- met.brewer("Renoir", n = length(ctrs), type = "continuous")
-names(cols) <- ctrs
+
+# Sort countries so that the order on the plot makes sense
+ctrs <- c("Iceland", "Norway", "Sweden", "Finland", "Estonia", 
+         "Ireland", "Denmark", "Poland", "Lithuania", "Latvia",
+         "Belgium", "Netherlands", "Germany", "Czechia", "Slovakia", 
+         "France", "Luxembourg", "Liechtenstein", "Austria", "Hungary", 
+         "Spain", "Slovenia", "Croatia", "Romania", "Bulgaria", 
+         "Portugal", "Italy", "Malta", "Greece", "Cyprus")
+
+# Sanity check
+stopifnot(all(sort(ctrs) == sort(unique(datECDC$countriesAndTerritories))))
+
+# Colors of the ratio areas
+colrect <- c("blue", "red")#met.brewer("OKeeffe1", 2, type = "continuous")
+
+# Name of the output
+fname <- "pics/phasePlotECDC.png"
 
 
-layout(matrix(c(1:length(ctrs)), ncol = 5, byrow = TRUE))
+
+png(fname, width = 8, height = 8, units = "in", res = 300)
+
+
+ncl <- 5 # Number of columns in the plot
+layout(matrix(c(1:length(ctrs), rep(1 + length(ctrs), ncl)), ncol = ncl, byrow = TRUE), heights = c(rep(1, 6), 0.3 ))
 
 minDate <- "2021-12-15"
-maxDate <- Sys.Date() - 4
+maxDate <- Sys.Date() - 5
 
 for(ctr in ctrs){
   subCountry <- datECDC[which(datECDC$countriesAndTerritories == ctr), ]
   subCountry <- subCountry[subCountry$date >= minDate & subCountry$date <= maxDate, ]
   
   # Initialize plot
-  par(mar = c(2, 2, 1, 0.2), mgp = c(2, 0.25, 0), tck = -0.02)
-  plot(1, type = "n", log = "xy", xlim = c(100, 5000), ylim = c(0.22, 4.2), 
-       xlab = "", ylab = "", main = ctr)
+  par(mar = c(2, 2, 1, 0.5), mgp = c(2, 0.1, 0), tck = -0.02, las = 1)
+  plot(1, type = "n", log = "xy", xlim = c(100, 5500), ylim = c(0.22, 4.5), 
+       xlab = "", ylab = "", main = ctr, axes = FALSE, frame.plot = TRUE)
   abline(h = 1)
+  axis(1, cex.axis = 0.65)
+  axis(2, cex.axis = 0.65)
+  mtext(side = 1, text = "7-d incidence per 100'000 inhabitants", cex = 0.45, line = 0.8)
+  mtext(side = 2, las = 3, text = "Week-to-week ratio \nof 7- incidence", cex = 0.4, line = 0.8)
+  
+  
+  # Colored rectangles
+  limPlot <- par("usr")
+  op <- 0.1
+  rect(xleft = 10^limPlot[1], ybottom = 10^limPlot[3], 
+       xright = 10^limPlot[2], ytop = 1, 
+       col = adjustcolor(colrect[1], op))
+  
+  rect(xleft = 10^limPlot[1], ybottom = 1, 
+       xright = 10^limPlot[2], ytop = 10^limPlot[4], 
+       col = adjustcolor(colrect[2], op))
 
+  # Data
   times <- subCountry$date
   cases <- subCountry$cases / subCountry$popData2020 * 10^5
   
   # Check missing dates
-    # If missing dates, add them
+    # If missing dates, add them (and fill cases with NA)
   if(!all(diff(times) == 1)){
     sC <- merge(data.frame(date = seq(min(as.Date(times)), max(as.Date(times)), by = "day")), subCountry, by = "date", all.x = TRUE)
     times <- sC$date
     cases <- sC$cases / sC$popData2020 * 10^5
   }
+  
+    # Annotations
+    colT <- gray(0.5)
+    cexT <- 1.5
+    dadj <- 0.5
+  text(x = 10^(limPlot[1]), y = 10^(limPlot[3]), adj = c(-0.1, 0 - dadj), 
+       labels = "  ←", 
+       col = colT, font = 2, cex = cexT) 
+  text(x = 10^(limPlot[1]), y = 10^(limPlot[4]), adj = c(-0.1, 1 + dadj), labels = "  →", 
+       col = colT, font = 2, cex = cexT)
 
-  plotPhase(times, cases, cols[ctr], incidRatio = TRUE)
+  # Plot phase portrait
+  pP <- plotPhase(times, cases, gray(0.3), incidRatio = TRUE)
+  
+  # Add point at the last data point, colored depending on its value
+  nend <- length(times)
+  colLast <- ifelse(pP$incid.ratios7[nend] < 1, colrect[1], colrect[2]) # Color
+  points(pP$incid7[nend], pP$incid.ratios7[nend], col = colLast, pch = 16, cex = 1.5)
   
 }
 
-#for(i in dev.list())dev.off()
-#legend("topleft", col = cols, legend = names(cols), pch = 16, box.lwd = 0)
+# Credits line
+par(mar = c(0.1, 2, 0, 0.5))
+plot(0, type = "n", axes = FALSE, xlab = "", ylab = "", xlim = c(0, 1), ylim = c(0, 1))
+text(x = 0, y = 0.5, adj = c(0, 0.5), 
+     labels = paste0("@flodebarre, ", Sys.Date(), ", inspired by @VictimOfMaths, @trvrb, @BristOliver\n", 
+                     "Data:  https://www.ecdc.europa.eu/en/publications-data/data-daily-new-cases-covid-19-eueea-country\n", 
+                     "Code: https://github.com/flodebarre/covid_indicateurs/blob/main/2022-03_ComparisonEurope.Rmd"), cex = 0.7, col = gray(0.5), family = "mono")
+
+dev.off()
+
+system(paste0("open ", fname))
 ```
 
 ## Specific countries
@@ -403,7 +464,7 @@ plotFIPS <- function(iDate, openPlot = FALSE){
       width = 8, height = 6, units = "in", res = 300)
   # Initialize plot window
   layout(matrix(1:2, nrow = 2), heights = c(6, 1))
-  par(mar = c(4, 4, 2, 0.2), mgp = c(2, 0.5, 0), tck = -0.01, 
+  par(mar = c(4, 4, 2, 0.5), mgp = c(2, 0.5, 0), tck = -0.01, 
       las = 1)
   plot(1, type = "n", log = "xy", xlim = c(100, 5000), ylim = c(1/2, 3), 
        xlab = "", ylab = "", main = paste0("Phase plots of Covid-19 cases, ", minDate, " -- ", endDate))
@@ -433,7 +494,14 @@ plotFIPS <- function(iDate, openPlot = FALSE){
     # Add country letter
     text(pP$incid7[nend], pP$incid.ratios7[nend], labels = substr(j, 1, 1), col = "white", cex = 0.7)
   }  
-  legend("topleft", inset = c(0.01, 0.01), col = cols, legend = names(cols), pch = 16, pt.cex = 1.5, box.lwd = 0)
+  legend("topleft", inset = c(0.01, 0.075), col = cols, legend = names(cols), pch = 16, pt.cex = 1.5, box.lwd = 0)
+  
+  limPlot <- par("usr")
+  colT <- gray(0.5)
+  text(x = 10^(limPlot[1]), y = 10^(limPlot[3]), adj = c(-0.1, -1), labels = "Cases decrease ←", col = colT)
+  text(x = 10^(limPlot[1]), y = 10^(limPlot[4]), adj = c(-0.1, 2), labels = "Cases increase →", col = colT)
+  
+  #........................................................
   
   par(mar = c(0.1, 2, 0, 0.5))
   plot(0, type = "n", axes = FALSE, xlab = "", ylab = "", xlim = c(0, 1), ylim = c(0, 1))
@@ -446,6 +514,7 @@ plotFIPS <- function(iDate, openPlot = FALSE){
                        "Spain data:    ", URL.Spain, "\n", 
                        "Code: https://github.com/flodebarre/covid_indicateurs/blob/main/2022-03_ComparisonEurope.Rmd"), cex = 0.5, col = gray(0.5), family = "mono")
   
+  
   dev.off()
   if(openPlot) system(paste0("open ", fname))  
 }
@@ -457,6 +526,10 @@ for(k in seq_along(days)[-(1:6)]){
   plotFIPS(k)
 }
 
+# Copy last pic
+for(i in 1:10){
+  system(paste0("cp pics/phaseCountries_", days[k], ".png", " pics/phaseCountries_", days[k], "_", i, ".png"))
+}
 
 # Convert into movie
 system("rm pics/phasePlotFIPBS.mp4")
