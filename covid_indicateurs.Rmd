@@ -441,6 +441,86 @@ if(doGif){
 
 ```
 
+# Phase plot
+
+```{r}
+#Music source "https://opengameart.org/content/sailor-waltz-with-water-effects-c64-style"
+```
+
+```{r}
+colW <- met.brewer("Egypt", n = 4, "discrete")[c(1, 2, 4, 3)]
+
+# Wave dates
+findDate <- function(itv){
+  dat.France[itv, "date"][which(dat.France$incid_hosp_ave7[itv] == min(dat.France$incid_hosp_ave7[itv]))]
+}
+
+d1 <- findDate(100:200)
+d2 <- findDate(400:500)
+d3 <- findDate(570:650)
+
+colsW <- rep(colW[1], nrow(dat.France))
+colsW[dat.France$date >= d1] <- colW[2]
+colsW[dat.France$date >= d2] <- colW[3]
+colsW[dat.France$date >= d3] <- colW[4]
+```
+
+
+```{r}
+endLine <- nrow(dat.France) - 4
+
+plotOJHosp <- function(endLine, png = TRUE){
+  
+  if(png){
+    png(paste0("pics/portraitHosp_", sprintf("%04d", endLine), ".png"), 
+        width = 6, height = 6.5, res = 150, units = "in")
+  }
+  ii <- 7:(endLine)
+  
+  par(las = 1, mgp = c(2.5, 0.5, 0), mar = c(3, 4, 2, 1))
+  plot(dat.France$incid_hosp_ave7[ii], dat.France$hosp[ii], col = adjustcolor(colsW[ii], 0.7), pch = 16, 
+       xlab = "", ylab = "", 
+       xlim = c(0, max(dat.France$incid_hosp_ave7, na.rm = TRUE)), 
+       ylim = c(0, max(dat.France$hosp, na.rm = TRUE)))
+  
+  # Add last point
+  points(dat.France$incid_hosp_ave7[endLine], dat.France$hosp[endLine], col = colsW[endLine], pch = 16, cex = 2)
+  
+  mtext(side = 2, text = "Beds occupied", line = 3, las = 3)
+  mtext(side = 1, text = "Daily admissions (7-d average)", line = 1.75)
+  title(paste0("France, ", dat.France[ii[1], "date"], "--", dat.France[endLine, "date"]))
+  
+  if(png){dev.off()}
+
+}
+
+plotOJHosp(nrow(dat.France) - 4)
+```
+
+```{r}
+if(doGif){
+  
+  for(k in 7:(nrow(dat.France) - 4) ){
+    plotOJHosp(k)
+  }
+  
+  
+  # Copy the last one to freeze the video
+  for(j in 1:20){
+    system(paste0("cp pics/portraitHosp_", sprintf("%04d", k), ".png", " pics/portraitHosp_", sprintf("%04d", k), "_", j, ".png"))
+  }
+  
+ # Convert into movie
+  system("rm pics/portraitHosp.mp4")
+  system("ffmpeg -pattern_type glob -i 'pics/portraitHosp_*.png' -vcodec libx264 -s 600x650 -pix_fmt yuv420p pics/portraitHosp.mp4")
+ 
+  
+  system("ffmpeg -i pics/portraitHosp.mp4 -i data/sailor_waltz_with_water_effects_c64_style.ogg -map 0 -map 1:a -c:v copy -shortest pics/portraitHosp_audio.mp4")
+  
+}
+```
+
+
 # Rea / soins intensifs
 
 ```{r}
