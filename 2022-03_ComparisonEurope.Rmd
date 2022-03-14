@@ -190,7 +190,7 @@ for(ctr in ctrs){
   axis(1, cex.axis = 0.65)
   axis(2, cex.axis = 0.65)
   mtext(side = 1, text = "7-d incidence per 100'000 inhabitants", cex = 0.45, line = 0.8)
-  mtext(side = 2, las = 3, text = "Week-to-week ratio \nof 7- incidence", cex = 0.4, line = 0.8)
+  mtext(side = 2, las = 3, text = "Week-to-week ratio \nof 7- incidence (log scale)", cex = 0.4, line = 0.8)
   
   
   # Colored rectangles
