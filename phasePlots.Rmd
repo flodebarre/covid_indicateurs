@@ -180,7 +180,7 @@ plotRatio <- function(dates, vals, ylim = NA, xlim = NA,
     # Plot doubling times
     for(i in c(1, 2, 4)){
       t <- log(2) / i
-      op <- 0.3
+      op <- 0.25
       abline(h = exp(t), col = adjustcolor(fgg, op), lwd = 1)
       abline(h = exp(-t), col = adjustcolor(fgg, op), lwd = 1)
     }
@@ -238,6 +238,9 @@ plotRatio <- function(dates, vals, ylim = NA, xlim = NA,
   # Just last point, bigger
   points(dates[nend], ratios7[nend], col = colScale[icols[nend]], pch = 16, cex = 2*cex)
   par(xpd = FALSE)
+  
+  # Output
+  list(ratios7 = ratios7, colEnd = colScale[icols[nend]])
   
 }
 
@@ -354,12 +357,20 @@ title(main = i)
 
 ## Ratios Departements
 
+Dynamics of the ratio of cases, by departement.
+
 ```{r compareDepartements, fig.height=12, fig.width=10, dpi = 300}
 source("../data/layout_departements.R")
 
 minDate <- "2021-12-25"
 
+fname <- "pics/casesRatios_departements.png"
+png(filename = fname, width = 10, height = 13, res = 500, units = "in")
 
+
+par(bg = gray(0.3), fg = "white")
+
+# Plot layout, placing each departement approximately where it is on the French map
 layout(deps.indices, heights = heights.deps, widths = widths.deps)
 
 i <- 1
@@ -369,10 +380,10 @@ for(i in geo.departements$index){
   tmp <- datDep[which(datDep$dep == dep &
                         datDep$cl_age90 == 0 &
                         datDep$jour >= "2021-12-25"), ]
-  par(mgp = c(2.5, 0.5, 0), mar = c(0, 0, 1, 0)+0.25)
+  par(mgp = c(2.5, 0.5, 0), mar = c(0.5, 0, 1, 0)+0.25)
 #  plot(0)
-  plotRatio(as.Date(tmp$jour), tmp$P, ylim = c(0.35, 3), axesLabels = FALSE, cex = 0.6, lightAxes = TRUE, colScale = palH, showGraduations = FALSE)
-  title(main = geo.departements[i, "nom_departement"], cex.main = 0.8, col.main = par()$fg, font.main = 1)
+  pR <- plotRatio(as.Date(tmp$jour), tmp$P, ylim = c(0.35, 3), axesLabels = FALSE, cex = 0.6, lightAxes = TRUE, colScale = palH, showGraduations = FALSE, bfg = c(par()$bg, par()$fg))
+  title(main = geo.departements[i, "nom_departement"], cex.main = 0.7, col.main = pR$colEnd, font.main = 1)
 
 
   }
@@ -386,21 +397,27 @@ dep <- "75"
  tmp <- datDep[which(datDep$dep == dep & 
                          datDep$cl_age90 == 0 & 
                          datDep$jour >= "2021-12-25"), ]
-  par(mgp = c(0.5, 0.1, 0), mar = c(0, 0, 1, 0))
-  plotRatio(as.Date(tmp$jour), tmp$P, ylim = c(0.35, 3), axesLabels = TRUE, cex = 0.7, lightAxes = TRUE, colScale = palH)
-    title(main = "Légende", cex.main = 0.8, col.main = par()$fg, font.main = 1)
+  par(mgp = c(0.5, 0.1, 0), mar = c(0, 0, 1.25, 0))
+  plotRatio(as.Date(tmp$jour), tmp$P, ylim = c(0.35, 3), axesLabels = TRUE, cex = 0.7, lightAxes = TRUE, colScale = palH, bfg = c(par()$bg, par()$fg), showGraduations = FALSE)
+  title(main = "Graduations \ndes figures", cex.main = 0.75, col.main = par()$fg, font.main = 1)
 
 
 emptyplot()
-text(0, 0, paste0("Ratios des cas d'une semaine à l'autre, ", as.Date(minDate) + 7, " -- ", max(datDep$jour)), adj = 
+text(0, 0, paste0("Ratios des nombres de cas d'une semaine à l'autre (échelle log), \n", format(as.Date(minDate) + 7, "%d/%m/%Y"), " -- ", format(as.Date(max(datDep$jour)), "%d/%m/%Y")), adj = 
 c(0.5, 0.5), cex = 1.5)
 
 
 emptyplot()
   limPlot <- par("usr") # limits of the plot in user coordinates
-text(limPlot[1], 0, paste0("@flodebarre, ", Sys.Date(), "\n", 
+text(limPlot[1], 0, paste0("@flodebarre, ", Sys.Date(), 
+                           ". Inspiré des figures de @BristOliver et de la carte des Décodeurs du Monde https://tinyurl.com/carteFRDecLM", 
+                           "\n", 
                   "Data: https://www.data.gouv.fr/fr/datasets/donnees-relatives-aux-resultats-des-tests-virologiques-covid-19/#
-Code: Code: https://github.com/flodebarre/covid_indicateurs/blob/main/phasePlots.Rmd"), cex = 0.7, family = "mono", adj = c(0, 0.5), col = gray(0.4))
+Code: Code: https://github.com/flodebarre/covid_indicateurs/blob/main/phasePlots.Rmd"), cex = 0.8, family = "mono", adj = c(0, 0.5), col = adjustcolor(par()$fg, 0.7) )
+
+
+dev.off()
+system(paste0("open ", fname))
 
 ```
 
@@ -461,78 +478,96 @@ maxVal <- ceiling(max(abs(log(ylim)))*10)/10 # max value for the scale
 logvals <- seq(-maxVal, maxVal, length.out = length(palH))
 vals2 <- round(exp(seq(-maxVal, maxVal, length.out = length(palH2))), 2)
 
-for(thedate in seq(as.Date(minDate), as.Date(max(datDep$jour)), by = "day")){
-  if(!any(is.element(c(thedate, as.Date(thedate, origin = "1970-01-01") - 7), as.Date(feries$date)))){
 
+# Function to plot map at a given date
+plotMapDep <- function(thedate){
+  
+  if(!any(is.element(c(thedate, as.Date(thedate, origin = "1970-01-01") - 7), as.Date(feries$date)))){
+    
     thedate <- as.Date(thedate, origin = "1970-01-01")
-  cat(thedate)
+    cat(thedate)
     
     fname <- paste0("pics/Ratio7Dep_", thedate, "_clage-", theageclass, ".png")
+    
+    mf_export(x = mdeps.metro, export = "png", 
+              filename = fname, width = 850, height = 800,
+              res = 90
+    )
+    
+    
+    
+    tmp1 <- datDep[datDep$jour == thedate & datDep$cl_age90 == 0 & is.element(datDep$dep, depsMetro), ]
+    tmp2 <- datDep[datDep$jour == as.character(as.Date(thedate) - 7) & datDep$cl_age90 == 0 & is.element(datDep$dep, depsMetro), ]
+    
+    tmp1 <- tmp1[order(tmp1$dep), c("dep", "P")]
+    tmp2 <- tmp2[order(tmp2$dep), c("dep", "P")]
+    
+    tmp1$ratio7 <- tmp1$P / tmp2$P
+    tmp <- merge(mdeps, tmp1, by.y = "dep", by.x = "code_insee")
+    tmp$logratio7 <- log(tmp$ratio7)
+    
+    
+    layout(1)
+    mf_theme(bg = par()$bg)
+    mf_init(tmp, expandBB = c(0.05, 0, 0.125, -0.2))
+    mf_map(tmp, var = "logratio7",
+           type = "choro", breaks = logvals, pal = palH, leg_pos = "n", add = TRUE)
+    
+    mf_legend_c(pos = "left", val = vals2, pal = palH2, title = "Ratio du nombre de cas \nd'une semaine à l'autre\n(échelle log)")
+    
+    mf_map(mregions, add = TRUE, col = gray(0, 0), lwd = 1)
+    mf_title(txt = paste0("Ratio du nombre de cas d'une semaine à l'autre, au ", format(as.Date(thedate), "%d/%m/%Y")), bg = par()$bg, fg = par()$fg, cex = 1.5)
+    
+    
+    mf_credits(paste0("@flodebarre, ", Sys.Date(), "\n", 
+                      "Données cas : https://www.data.gouv.fr/fr/datasets/donnees-relatives-aux-resultats-des-tests-virologiques-covid-19/#\n",
+                      "Fond de carte : © les contributeurs d'OpenStreetMap sous licence ODbL. Carte réalisée avec le package ",
+                      "mapsf ",
+                      packageVersion("mapsf")), cex = 0.8)
+    
+    
+    
+    mar.inset <- c(0, 0, 0.8, 0) # Margins of the inset
+    line.title.2 <- 0.2 # Line position of the inset titles, communes
+    
+    # Petite couronne
+    mf_inset_on(fig = c(0.825, 0.95, 0.8, 0.95) - 0.05 * c(0, 0, 1, 1))
+    tmpP <- tmp[is.element(tmp$code_insee, c("75", "92", "93", "94")),]
+    mf_theme(mar = mar.inset)
+    mf_init(tmpP, expandBB = c(0, 0, 0, 0))
+    mf_map(tmpP, var = "logratio7", type = "choro", breaks = logvals, pal = palH, leg_pos = "n", add = TRUE)
+    mf_title("Petite couronne", tab = TRUE, inner = FALSE, line = 0.5, cex = 0.8, bg = gray(0, 0), fg = par()$fg)
+    box()
+    mf_inset_off()
+    
+    mf_inset_on(fig = c(0, 0.35, 0.725, 0.98))
+    subFra <- datFra[which(datFra$jour >= as.Date(minDate) - 7 & datFra$cl_age90 == theageclass & datFra$jour <= thedate), c("jour", "P")]
+    par(mar = c(2, 2, 1, 0.5), cex.lab = 0.7, mgp = c(3, 0.25, 0))
+    plotRatio(as.Date(subFra$jour), subFra$P, colScale = palH, xlim = c(as.Date(minDate), Sys.Date() - 3), ylim = ylim)
+    title("France entière", font.main = 1, cex.main = 1)
+    cext <- 0.75
+    colt <- gray(0.5)
+    text(as.Date(minDate), y = 0.6, labels = "Le nb de cas diminue", cex = cext, adj = c(0, 0.5), col = colt)
+    text(as.Date(minDate), y = 2.6, labels = "Le nb de cas augmente", cex = cext, adj = c(0, 0.5), col = colt)
+    mf_inset_off()
+    
+    dev.off()
+  } # end if ferie
+}
+
+
+# Plot the last one
+plotMapDep(max(datDep$jour))
+
+
+```
+
+Animation 
+
+```{r, eval = FALSE}
+for(thedate in seq(as.Date(minDate), as.Date(max(datDep$jour)), by = "day")){
+  plotMapDep(thedate)
   
-mf_export(x = mdeps.metro, export = "png", 
-          filename = fname, width = 850, height = 800,
-          res = 90
-            )
-
-
-
-tmp1 <- datDep[datDep$jour == thedate & datDep$cl_age90 == 0 & is.element(datDep$dep, depsMetro), ]
-tmp2 <- datDep[datDep$jour == as.character(as.Date(thedate) - 7) & datDep$cl_age90 == 0 & is.element(datDep$dep, depsMetro), ]
-
-tmp1 <- tmp1[order(tmp1$dep), c("dep", "P")]
-tmp2 <- tmp2[order(tmp2$dep), c("dep", "P")]
-
-tmp1$ratio7 <- tmp1$P / tmp2$P
-tmp <- merge(mdeps, tmp1, by.y = "dep", by.x = "code_insee")
-tmp$logratio7 <- log(tmp$ratio7)
-
-
-layout(1)
-mf_theme(bg = par()$bg)
-mf_init(tmp, expandBB = c(0.05, 0, 0.125, -0.2))
-mf_map(tmp, var = "logratio7",
-       type = "choro", breaks = logvals, pal = palH, leg_pos = "n", add = TRUE)
-
-mf_legend_c(pos = "left", val = vals2, pal = palH2, title = "Ratio du nombre de cas \nd'une semaine à l'autre\n(échelle log)")
-
-mf_map(mregions, add = TRUE, col = gray(0, 0), lwd = 1)
-mf_title(txt = paste0("Ratio du nombre de cas d'une semaine à l'autre, au ", format(as.Date(thedate), "%d/%m/%Y")), bg = par()$bg, fg = par()$fg, cex = 1.5)
-
-
-mf_credits(paste0("@flodebarre, ", Sys.Date(), "\n", 
-                  "Données cas : https://www.data.gouv.fr/fr/datasets/donnees-relatives-aux-resultats-des-tests-virologiques-covid-19/#\n",
-                  "Fond de carte : © les contributeurs d'OpenStreetMap sous licence ODbL. Carte réalisée avec le package ",
-                  "mapsf ",
-                  packageVersion("mapsf")), cex = 0.8)
-
-
-
-mar.inset <- c(0, 0, 0.8, 0) # Margins of the inset
-line.title.2 <- 0.2 # Line position of the inset titles, communes
-
-# Petite couronne
-mf_inset_on(fig = c(0.825, 0.95, 0.8, 0.95) - 0.05 * c(0, 0, 1, 1))
-tmpP <- tmp[is.element(tmp$code_insee, c("75", "92", "93", "94")),]
-mf_theme(mar = mar.inset)
-mf_init(tmpP, expandBB = c(0, 0, 0, 0))
-mf_map(tmpP, var = "logratio7", type = "choro", breaks = logvals, pal = palH, leg_pos = "n", add = TRUE)
-mf_title("Petite couronne", tab = TRUE, inner = FALSE, line = 0.5, cex = 0.8, bg = gray(0, 0), fg = par()$fg)
-box()
-mf_inset_off()
-
-mf_inset_on(fig = c(0, 0.35, 0.725, 0.98))
-subFra <- datFra[which(datFra$jour >= as.Date(minDate) - 7 & datFra$cl_age90 == theageclass & datFra$jour <= thedate), c("jour", "P")]
-par(mar = c(2, 2, 1, 0.5), cex.lab = 0.7, mgp = c(3, 0.25, 0))
-plotRatio(as.Date(subFra$jour), subFra$P, colScale = palH, xlim = c(as.Date(minDate), Sys.Date() - 3), ylim = ylim)
-title("France entière", font.main = 1, cex.main = 1)
-cext <- 0.75
-colt <- gray(0.5)
-text(as.Date(minDate), y = 0.6, labels = "Le nb de cas diminue", cex = cext, adj = c(0, 0.5), col = colt)
-text(as.Date(minDate), y = 2.6, labels = "Le nb de cas augmente", cex = cext, adj = c(0, 0.5), col = colt)
-mf_inset_off()
-
-dev.off()
-} # end if ferie
 } # end loop date
 
 # system(paste0("open ", fname))
@@ -561,8 +596,7 @@ agCl <- 0
 tmpDep <- datDep[which(datDep$jour >= as.Date(minDate) - 14 & datDep$cl_age90 == agCl), ]
 ```
 
-```{r phasePlotDep, fig.width=10.66, fig.height=6}
-
+```{r phasePlotDep_FunctionDefinition, fig.width=10.66, fig.height=6}
 endDates <- seq(as.Date(minDate), as.Date(max(tmpDep$jour)), by = "day")
 
 plotPhaseDep0 <- function(idate){
@@ -575,9 +609,11 @@ plotPhaseDep0 <- function(idate){
   layout(matrix(1:2, ncol = 2), widths = c(5, 1.5))
   
   par(mar = c(6, 4, 2, 0), las = 1, mgp = c(2.5, 0.5, 0), tck = -0.01, bg = gray(1))
+  op <- 0.7 # color opacity
+  
   # Initialize plot
   plot(1, type = "n", xlim = c(100, 5000), ylim = c(0.4, 4), log = "xy", 
-       xlab = "7-day incidence per 100'000 inhabitants", ylab = "week-to-week ratio of 7-day incidence")
+       xlab = "7-day incidence per 100'000 inhabitants", ylab = "week-to-week ratio of 7-day incidence (log scale)")
   abline(h = 1, lwd = 2)
   limPlot <- par("usr")
   
@@ -616,9 +652,9 @@ Code: https://github.com/flodebarre/covid_indicateurs/blob/main/phasePlots.Rmd
     inna <- which(!is.na(incid7) & !is.na(ratios7))
     
     #lines(incid7[inna], ratios7[inna], col = "red", type = "l")
-    lines(incid7[inna], ratioIncid7[inna], col = colReg[reg], type = "l")
+    lines(incid7[inna], ratioIncid7[inna], col = adjustcolor(colReg[reg], op), type = "l")
     
-    points(x = incid7[nend], y = ratioIncid7[nend], col = colReg[reg], cex = 2, pch = 16)
+    points(x = incid7[nend], y = ratioIncid7[nend], col = adjustcolor(colReg[reg], op), cex = 2, pch = 16)
     
     text(x = incid7[nend], y = ratioIncid7[nend], col = "white", cex = 0.45, labels = i, adj = c(0.5, 0.5))
     
@@ -647,12 +683,25 @@ Code: https://github.com/flodebarre/covid_indicateurs/blob/main/phasePlots.Rmd
   
 }
 
+# Plot last picture
+plotPhaseDep0(length(endDates))
+
+```
+
+
+```{r phasePlotDep, fig.width=10.66, fig.height=6}
 length(endDates)
-for(i in seq_along(endDates)){
-  print(i)
-  plotPhaseDep0(i)
+for(iD in seq_along(endDates)){
+  print(iD)
+  plotPhaseDep0(iD)
 }
 
+# paste0("pics/phaseDep_", formatC(idate, width=3, flag="0"), ".png")
+
+# Copy last pic
+for(j in 1:10){
+  system(paste0("cp pics/phaseDep_", formatC(iD, width=3, flag="0"), ".png", " pics/phaseDep_", formatC(iD, width=3, flag="0"), "_", j, ".png"))
+}
 
 # Convert into movie
 system("rm pics/mapPhasePlotDep.mp4")
