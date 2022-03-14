@@ -9,6 +9,10 @@ output:
     toc_float: true
 ---
 
+
+**NOTE** I am just using Rmd here to organize my code. 
+
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 knitr::opts_knit$set(global.par = TRUE)
