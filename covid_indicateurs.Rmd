@@ -23,68 +23,106 @@ today <- Sys.Date() # today's date
 # Whether to generate a gif
 doGif <- TRUE
 lang <- "FR"#"EN" #"FR" 
+
+dataVersion <- 2
+# 1: indicateurs dataset
+# 2: hospitalisation dataset
+
+source("usefulFunctions.R")
+
 ```
 
 
 Mise à jour du `r today`.   
-Source des données : <https://www.data.gouv.fr/fr/datasets/synthese-des-indicateurs-de-suivi-de-lepidemie-covid-19/>
 
-# Generic functions and parameters
-
-```{r}
-# Function to compute a sliding window 
-sliding.window <- function(v, winwdt = 7, pos = 4, na.rm = TRUE){
-  # v vector to be averaged/summed
-  # winwdt width of the window 
-  # pos position of the focal day in the window
-  # FUN function to apply
-  n <- length(v)
-  # Initialize output vector
-  out <- 0 * v + (-1)
-  out[1:(pos-1)] <- NA
-  out[(n + 1 - winwdt + pos) : n] <- NA
-  
-  for(i in pos : (n - winwdt + pos)){
-    out[i] <- mean(v[(i - pos + 1):(i + winwdt - pos)], na.rm = na.rm)
-  }
-  return(out[1:n])
-}
-```
 
 # Load and clean data
 
+## Version 1
+
 ```{r}
-URL <- "https://www.data.gouv.fr/fr/datasets/r/f335f9ea-86e3-4ffa-9684-93c009d5e617"
-dataFile <- paste0("data/FranceIndic_", today, ".csv") # name file with today's date
-download.file(URL, dataFile) # download file from repo
-dat.France <- read.csv(dataFile, sep = ",", stringsAsFactors = FALSE)
+if(dataVersion == 1){
+  # Source: <https://www.data.gouv.fr/fr/datasets/synthese-des-indicateurs-de-suivi-de-lepidemie-covid-19/>
+  URLsource <- "https://www.data.gouv.fr/fr/datasets/synthese-des-indicateurs-de-suivi-de-lepidemie-covid-19/"
+  URL <- "https://www.data.gouv.fr/fr/datasets/r/f335f9ea-86e3-4ffa-9684-93c009d5e617"
+  dataFile <- paste0("data/FranceIndic_", today, ".csv") # name file with today's date
+  download.file(URL, dataFile) # download file from repo
+  dat.France <- read.csv(dataFile, sep = ",", stringsAsFactors = FALSE)
+  
+  # Remove leading NAs
+  ibegin <- which(!is.na(dat.France$hosp | !is.na(dat.France$rea)))[1]
+  dat.France <- dat.France[-(1:ibegin), ]
+  
+  # Compute sliding window average
+  dat.France$incid_hosp_ave7 <- sliding.window(dat.France$incid_hosp, pos = 7)
+  
+}
 ```
 
-Remove leading NAs
-```{r}
-ibegin <- which(!is.na(dat.France$hosp | !is.na(dat.France$rea)))[1]
-dat.France <- dat.France[-(1:ibegin), ]
+## Version 2
+
+TODO: add with/for columns
+
+```{r, results='hide'}
+if(dataVersion == 2){
+  # Source: https://www.data.gouv.fr/fr/datasets/donnees-hospitalieres-relatives-a-lepidemie-de-covid-19/
+  URLsource <- "https://www.data.gouv.fr/fr/datasets/donnees-hospitalieres-relatives-a-lepidemie-de-covid-19/"
+  
+  URL2 <- "https://www.data.gouv.fr/fr/datasets/r/fe3e7099-a975-4181-9fb5-2dd1b8f1b552"
+  
+  dataFile <- paste0("data/FranceHosp_", today, ".csv") # name file with today's date
+  download.file(URL2, dataFile) # download file from repo
+  dat.France2 <- read.csv(dataFile, sep = ";", stringsAsFactors = FALSE)
+  
+  head(dat.France2)
+  
+  dat.France2.tot <- dat.France2[dat.France2$PourAvec == 0, ]
+  dim(dat.France2.tot)
+  
+  # Rename columns
+  # The data are per 100'000, 
+  # and SPF used INSEE 2020 population estimations (given in the vaccine datasets)
+  fact <- 67114995 / 10^5
+  dat.France2.tot$incid_hosp_ave7 <- dat.France2.tot$tx_indic_7J_hosp * fact / 7
+  dat.France2.tot$hosp <- dat.France2.tot$tx_prev_hosp * fact
+  dat.France2.tot$rea <- dat.France2.tot$tx_prev_SC * fact
+  
+  # Sanity checks between the two versions
+  # range(dat.France2.tot$hosp)
+  # range(dat.France$hosp)
+  
+  # range(dat.France2.tot$incid_hosp_ave7 / 7)
+  # range(dat.France$incid_hosp_ave7, na.rm = TRUE)
+  
+  # range(dat.France2.tot$rea)
+  # range(dat.France$rea)
+  
+  dat.France <- dat.France2.tot
+  dat.France$date <- dat.France$jour
+}
+
 ```
 
-Compute sliding window average
-```{r}
-dat.France$incid_hosp_ave7 <- sliding.window(dat.France$incid_hosp)
-```
-
-Transform dates as decimals
-```{r}
-year <- substr(dat.France$date, 1, 4) # Extract year
-nbdays <- rep(365, nrow(dat.France)) # Number of days in the year
-nbdays[year == "2020"] <- 366 # 2020 is leap year
-
-dat.France$fracYear <- as.numeric(base::as.Date(dat.France$date) - base::as.Date(paste0(year, "-01-01"))) / nbdays # Fraction of the year
-```
-
+## Clean dates
 
 ```{r eval = FALSE}
 # Just for console evaluation
 head(dat.France)
 ```
+
+
+```{r}
+# Transform dates as decimals
+year <- substr(dat.France$date, 1, 4) # Extract year
+nbdays <- rep(365, nrow(dat.France)) # Number of days in the year
+nbdays[year == "2020"] <- 366 # 2020 is leap year
+
+# Rewrite dates as fraction of the current year
+dat.France$fracYear <- as.numeric(base::as.Date(dat.France$date) - base::as.Date(paste0(year, "-01-01"))) / nbdays # Fraction of the year
+
+```
+
+# Useful functions
 
 ```{r}
 # Polar coordinates: r, theta
@@ -111,10 +149,12 @@ polar2xy <- function(r, frac){
 # col2022 <- "#FFBA00"
 
 library("MetBrewer")
-pal <- met.brewer("Derain", n = 3, type = "discrete")
-col2020 <- pal[3]
-col2021 <- pal[1]
-col2022 <- pal[2]
+
+pal <- met.brewer("Egypt", n = 4, "discrete")
+
+col2020 <- pal[2]
+col2021 <- pal[4]
+col2022 <- pal[3]
 
 
 
@@ -134,7 +174,7 @@ colsTrp <- makeTransparent(cols, 70)
 ```
 
 ```{r}
-addLegendPlot <- function(iend, graduations1, graduations2, r, dfinal, valfinal){
+addLegendPlot <- function(iend, graduations1, graduations2, r, dfinal, valfinal, yearfinal = 2022, addCircle = FALSE){
   # graduations1 main graduations for number in concentric circles
   # graduations2 sub graduations
   # r radius of months / time legend
@@ -173,17 +213,21 @@ addLegendPlot <- function(iend, graduations1, graduations2, r, dfinal, valfinal)
   # Add line to locate the current days
   
   # Line to show the date
-  lines(c(0, gmax * cos(dfinal)), c(0, gmax * sin(dfinal)))
+  lines(c(0, gmax * cos(dfinal)), c(0, gmax * sin(dfinal)), col = "gray")
   # Text with the date
   text(x = r * cos(dfinal), y = r * sin(dfinal), labels = dat.France[iend, "date"], srt = 90 - dat.France[iend, "fracYear"]*360, adj = c(0.2, 0.5), cex = 0.75, col = "black", )
   
-  text(x = 0, y = r, adj = c(0, 0), labels = " 2021", col = col2021)
-  text(x = 0, y = r, adj = c(1, 0), labels = "2020 ", col = col2020)
-  text(x = 0, y = r, adj = c(0, 1), labels = " 2022", col = col2022)
+  dr <- 0.05 * r
+  cexT <- 0.8
+  text(x = 0, y = r+dr, adj = c(0.5, 0), labels = "2020", col = col2020, cex = cexT)
+  if(yearfinal >= 2021) text(x = 0, y = r, adj = c(0.5, 0), labels = "2021", col = col2021, cex = cexT)
+  if(yearfinal >= 2022) text(x = 0, y = r-dr, adj = c(0.5, 0), labels = "2022", col = col2022, cex = cexT)
   
+  if(addCircle){
   # Add circle to locate the value
     fxy <- polar2xy(valfinal, seq(0, 1, length.out = 100))
     lines(fxy$x, fxy$y, type = "l", col = "black", lty = 1.5, lwd = lwd.grad)
+  }
 }
 ```
 
@@ -194,70 +238,81 @@ pxy <- polar2xy(dat.France$hosp, dat.France$fracYear)
 ```
 
 ```{r}
-plotHosp <- function(iend = nrow(dat.France)){
+plotHosp <- function(iend = nrow(dat.France), lang = "FR"){
   
-# Initalize plot
-par(pty="s")
-par(mar = rep(3.5, 4))
-rg <- 1.1 * c(- pxy$maxval, pxy$maxval)
-plot(0, 0, type = "n", xlim = rg, ylim = rg, 
-     xlab = "", ylab = "", 
-     asp = 1, 
-     axes = FALSE
-     )
+  # Initalize plot
+  par(pty="s")
+  par(mar = rep(3.5, 4))
+  rg <- 1.1 * c(- pxy$maxval, pxy$maxval)
+  plot(0, 0, type = "n", xlim = rg, ylim = rg, 
+       xlab = "", ylab = "", 
+       asp = 1, 
+       axes = FALSE
+  )
+  
+  par(xpd = TRUE)
+  
+  graduations1 <- c(10000, 20000, 30000)
+  graduations2 <- c(graduations1 - 5000, 35000)
+  r <- 40000 # Radius of the month labels
+  dfinal <- frac2angle(dat.France[iend, "fracYear"]) # End day of the plot
+  valfinal <- dat.France[iend, "hosp"]
+  
+  addLegendPlot(iend, graduations1, graduations2, r, dfinal, yearfinal =  as.numeric(substr(dat.France[iend, "date"], 1, 4)))
+  
+  
+  if(lang == "FR"){
+    title(main = "COVID-19, patients hospitalisés", line = 2.5)
+  }else{
+    title(main = "COVID-19, hospitalized patients", line = 2.5)
+  }
+  
+  
+  #text(x = 0, y = -r - 5000, labels = paste0("Source des données : ", URL, "
+  #Mise à jour : ", today, " | ", "@flodebarre"), adj = c(0.5, 1), cex = 0.75)
+  
+  par(xpd = FALSE)
+  
+  # Plot values
+  points(pxy$x[1:iend], pxy$y[1:iend], col = adjustcolor(cols, 0.8), pch = 16, cex = 0.75)
+  
+  # Add last points, bigger
+  points(pxy$x[iend], pxy$y[iend], col = cols[iend], pch = 16, cex = 2)
 
-par(xpd = TRUE)
-
-graduations1 <- c(10000, 20000, 30000)
-graduations2 <- c(graduations1 - 5000, 35000)
-r <- 40000 # Radius of the month labels
-dfinal <- frac2angle(dat.France[iend, "fracYear"]) # End day of the plot
-valfinal <- dat.France[iend, "hosp"]
-
-addLegendPlot(iend, graduations1, graduations2, r, dfinal, valfinal)
-
-
-if(lang == "FR"){
-  title(main = "COVID-19, patients hospitalisés", line = 2.5)
-}else{
-  title(main = "COVID-19, hospitalized patients", line = 2.5)
+  
+  #legend(x = "topright", col = c(col2020, col2021), pch = 16, legend = c(expression("2020", col = "blue"), "2021"), cex = 0.8, pt.cex = 0.5, bty = "n")
+  
+  
+  if(lang == "FR"){
+    txt <- paste0("@flodebarre, ", today, "
+Data : ", URLsource, ", 
+Code : https://github.com/flodebarre/covid_indicateurs/blob/main/covid_indicateurs.Rmd"
+)
+  }else{
+    txt <- paste0("@flodebarre, ", today, "
+Data: ", URLsource, ", 
+Code: https://github.com/flodebarre/covid_indicateurs/blob/main/covid_indicateurs.Rmd"
+)
+  }
+  mtext(side = 1, text = txt, cex = 0.55, line = 2, family = "mono", adj = 0, col = gray(0.4))
+  
 }
+plotHosp(lang  = "EN")
 
-
-#text(x = 0, y = -r - 5000, labels = paste0("Source des données : ", URL, "
-#Mise à jour : ", today, " | ", "@flodebarre"), adj = c(0.5, 1), cex = 0.75)
-
-par(xpd = FALSE)
-
-
-points(pxy$x[1:iend], pxy$y[1:iend], col = cols, pch = 16, cex = 0.5)
-
-#legend(x = "topright", col = c(col2020, col2021), pch = 16, legend = c(expression("2020", col = "blue"), "2021"), cex = 0.8, pt.cex = 0.5, bty = "n")
-
-
-if(lang == "FR"){
-  txt <- paste0("Source des données :
-https://www.data.gouv.fr/fr/datasets/synthese-des-indicateurs-de-suivi-de-lepidemie-covid-19/
-Code : https://github.com/flodebarre/covid_indicateurs/blob/main/covid_indicateurs.Rmd
-Mise à jour : ", today, " | ", "@flodebarre")
-}else{
-  txt <- paste0("Data: 
-https://www.data.gouv.fr/fr/datasets/synthese-des-indicateurs-de-suivi-de-lepidemie-covid-19/", "
-Code: https://github.com/flodebarre/covid_indicateurs/blob/main/covid_indicateurs.Rmd
-Date: ", today, " | ", "@flodebarre")
-}
-  mtext(side = 1, text = txt, cex = 0.55, line = 2, family = "mono", adj = 0)
-
-}
-plotHosp()
 ```
 
 ```{r}
 if(doGif){
+  system("rm pics/hosp_*") # Erase previous pictures
   for(iend in 1:nrow(dat.France)){
-    png(filename = paste0("pics/hosp_", sprintf("%04d", iend), ".png"), width = 700, height = 700, pointsize = 20)
-    plotHosp(iend)
+    png(filename = paste0("pics/hosp_", sprintf("%04d", iend), ".png"), width = 7, height = 7, units = "in", res = 150)
+    plotHosp(iend, lang = "EN")
     dev.off()
+  }
+  
+  # Copy the last one to freeze the video
+  for(j in 1:10){
+    system(paste0("cp pics/hosp_", sprintf("%04d", iend), ".png", " pics/hosp_", sprintf("%04d", iend), "_", j, ".png"))
   }
   
   # Convert into gif (too heavy now)
@@ -268,7 +323,7 @@ if(doGif){
   
   # Convert into movie
   system("rm pics/hosp.mp4")
-  system("ffmpeg -pattern_type glob -i 'pics/hosp*.png' -vcodec libx264 -s 750x700 -pix_fmt yuv420p pics/hosp.mp4")
+  system("ffmpeg -pattern_type glob -i 'pics/hosp*.png' -vcodec libx264 -s 700x700 -pix_fmt yuv420p pics/hosp.mp4")
   
   # Remove temporary files
   #system("rm pics/hosp*.png")
@@ -280,6 +335,106 @@ iend <- nrow(dat.France)
 png(filename = paste0("pics/hosp_", sprintf("%04d", iend), ".png"), width = 700, height = 700, pointsize = 20)
 plotHosp(iend)
 dev.off()
+
+```
+
+# Hospital admissions
+
+```{r}
+pxy.adm <- polar2xy(dat.France$incid_hosp_ave7, dat.France$fracYear)
+```
+
+```{r}
+plotHospAdmissions <- function(iend = nrow(dat.France), lang = "FR"){
+  
+  # Initalize plot
+  par(pty="s")
+  par(mar = rep(3.5, 4))
+  rg <- 1.1 * c(- pxy.adm$maxval, pxy.adm$maxval)
+  plot(0, 0, type = "n", xlim = rg, ylim = rg, 
+       xlab = "", ylab = "", 
+       asp = 1, 
+       axes = FALSE
+  )
+  
+  par(xpd = TRUE)
+  
+  graduations1 <- c(1000, 2000, 3000)
+  graduations2 <- c(graduations1 - 500)
+  r <- 3500 # Radius of the month labels
+  dfinal <- frac2angle(dat.France[iend, "fracYear"]) # End day of the plot
+  valfinal <- dat.France[iend, "incid_hosp_ave7"]
+  
+  addLegendPlot(iend, graduations1, graduations2, r, dfinal, yearfinal =  as.numeric(substr(dat.France[iend, "date"], 1, 4)))
+  
+  
+  if(lang == "FR"){
+    title(main = "COVID-19, nouveaux patients hospitalisés (moyenne glissante sur 7j)", line = 2, font.main = 1)
+  }else{
+    title(main = "COVID-19, newly hospitalized patients (7-day average)", line = 2, font.main = 1)
+  }
+  
+  
+  #text(x = 0, y = -r - 5000, labels = paste0("Source des données : ", URL, "
+  #Mise à jour : ", today, " | ", "@flodebarre"), adj = c(0.5, 1), cex = 0.75)
+  
+  par(xpd = FALSE)
+  
+  # Plot values
+  points(pxy.adm$x[1:iend], pxy.adm$y[1:iend], col = adjustcolor(cols, 0.8), pch = 16, cex = 0.75)
+  
+  # Add last points, bigger
+  points(pxy.adm$x[iend], pxy.adm$y[iend], col = cols[iend], pch = 16, cex = 2)
+
+  
+  #legend(x = "topright", col = c(col2020, col2021), pch = 16, legend = c(expression("2020", col = "blue"), "2021"), cex = 0.8, pt.cex = 0.5, bty = "n")
+  
+  
+  if(lang == "FR"){
+    txt <- paste0("@flodebarre, ", today, "
+Data : ", URLsource, ", 
+Code : https://github.com/flodebarre/covid_indicateurs/blob/main/covid_indicateurs.Rmd"
+)
+  }else{
+    txt <- paste0("@flodebarre, ", today, "
+Data: ", URLsource, ", 
+Code: https://github.com/flodebarre/covid_indicateurs/blob/main/covid_indicateurs.Rmd"
+)
+  }
+  mtext(side = 1, text = txt, cex = 0.55, line = 2, family = "mono", adj = 0, col = gray(0.4))
+  
+}
+plotHospAdmissions(lang  = "EN", iend = nrow(dat.France) - 7)
+```
+
+```{r}
+if(doGif){
+  
+  nfinal <- nrow(dat.France) - 3
+  system("rm pics/hospAdmin_*") # Erase previous pictures
+  for(iend in 1:nfinal){
+    png(filename = paste0("pics/hospAdmin_", sprintf("%04d", iend), ".png"), width = 7, height = 7, units = "in", res = 150)
+    plotHospAdmissions(iend, lang = "EN")
+    dev.off()
+  }
+  
+  # Copy the last one to freeze the video
+  for(j in 1:10){
+    system(paste0("cp pics/hospAdmin_", sprintf("%04d", nfinal), ".png", " pics/hospAdmin_", sprintf("%04d", iend), "_", j, ".png"))
+  }
+  
+
+  # Convert into movie
+  system("rm pics/hospAdmin.mp4")
+  system("ffmpeg -pattern_type glob -i 'pics/hospAdmin*.png' -vcodec libx264 -s 700x700 -pix_fmt yuv420p pics/hospAdmin.mp4")
+  
+  # Remove temporary files
+  #system("rm pics/hospAdmin_*.png")
+  
+}
+
+
+
 ```
 
 # Rea / soins intensifs
