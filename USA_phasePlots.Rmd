@@ -6,20 +6,30 @@ editor_options:
 ---
 
 ```{r}
-dlData <- TRUE
+# Whether to download the data again
+dlData <- FALSE 
+# They will be downloaded in a `data/USA/` folder
 
 source("usefulFunctions.R")
+# Sliding window function comes from here
 ```
 
 # Load Data
 
-```{r downloadJHU}
+```{r}
+# Days for which we want data
 days <- seq(as.Date("2021-12-01"), Sys.Date(), by = "day") # Dates to be downloaded
 daysUS <- format(days, "%m-%d-%Y") # Version in US format
+```
+
+
+```{r downloadJHU}
+# I am downloading the daily data, because time series are by county and I do not know whether they are exhaustive
 
 dataUSlist <- list()
 
 if(dlData){
+  # For each day, download the corresponding dataset
   for(id in seq_along(daysUS)){
     print(days[id])
   
@@ -28,6 +38,8 @@ if(dlData){
     download.file(URL, paste0("data/USA/casesUS_", days[id], ".csv"))
   }
 }
+
+# Group all the datasets in a single data frame
 
 for(id in seq_along(days)){
   fname <- paste0("data/USA/casesUS_", days[id], ".csv")
@@ -41,17 +53,18 @@ for(id in seq_along(days)){
 
 dataUS <- do.call("rbind", dataUSlist)
 
+
 # Check we have all states, written the same way
 cbind(unique(dataUS$Province_State), is.element(unique(dataUS$Province_State), pos$name))
 # Select the main states
 dataUS <- dataUS[is.element(dataUS$Province_State, pos$name), ]
 
+# Export the data just in case
 write.csv(dataUS, "data/USA/combinedDailyData.csv", row.names = FALSE)
 ```
 
 
 ```{r defineStateColors}
-
 # List of US states and geographic positions
 pos <- read.csv("data/USA/USstates.csv")
 
@@ -103,8 +116,8 @@ all(diff(unique(as.Date(dataUS$date))) == 1)
 # Define ratios
 
 ```{r defineRatios}
-newdatUS <- data.frame(date = c())
 
+# Initialize columns
 dataUS$newCases <- NA
 dataUS$newIncidence <- NA
 dataUS$newIncid7 <- NA
@@ -112,10 +125,11 @@ dataUS$ratio7I7 <- NA
 dataUS$newIncid7spline <- NA
 dataUS$ratio7I7s <- NA
 
-dataStates <- list()
-
-for(istate in 1:50){
+# For each state
+for(istate in 1:nrow(pos)){
+  # Lines of the big dataset corresponding to this state
   ii <- which(dataUS$Province_State == pos[istate, "name"])
+  # Subset of the data for this state
   tmp <- dataUS[ii, ]
   # Check that dates are consecutive
   stopifnot(all(diff(tmp$date) == 1))
@@ -128,15 +142,13 @@ for(istate in 1:50){
   # Compute week-to-week incidence ratio
   tmp$ratio7I7 <- NA
   tmp$ratio7I7[8:nrow(tmp)] <- tmp$newIncid7[8:nrow(tmp)] / tmp$newIncid7[8:nrow(tmp) - 7]
-  
   # Compute smoother 7-d incidence
+  # spar parameter controls the amount of smoothing
   tmp$newIncid7spline <- c(rep(NA, 7), smooth.spline(tmp$newIncid7[8:nrow(tmp)], spar = 0.7)$y)
-  
   # Compute week-to-week incidence ratio on smoothed data
   tmp$ratio7I7s <- NA
   tmp$ratio7I7s[8:nrow(tmp)] <- tmp$newIncid7spline[8:nrow(tmp)] / tmp$newIncid7spline[8:nrow(tmp) - 7]
 
-    
   # Add to the original dataset
   for(cl in c("newCases", "newIncidence", "newIncid7", "ratio7I7", "newIncid7spline", "ratio7I7s")){
       dataUS[ii, cl] <- tmp[, cl]
@@ -146,13 +158,13 @@ for(istate in 1:50){
 
 # Plot
 
-```{r testPlots}
-range(dataUS$ratio7I7, na.rm = TRUE)
+*Just checking the data, no need to evaluate this chunk*
 
-plot(dataUS$date, dataUS$newIncid7)
-
+```{r testPlots, eval = FALSE}
 layout(1)
 par(mar = c(5, 3, 3, 1))
+
+# Plot all states on the same phase portrait
 plot(dataUS$newIncid7spline, dataUS$ratio7I7s, 
      ylim = c(0.1, 5), xlim = c(5, 3000),
      log = "xy", type = "n")
@@ -161,18 +173,19 @@ for(state in pos$name){
   lines(tmp$newIncid7spline, tmp$ratio7I7s, col = dicCol[state], type = "p", pch = 16, cex = 0.8)
 }
 
-layout(matrix(1:50, ncol = 5))
+# Plot the phase portraits separately
+layout(matrix(1:50, ncol = 5, byrow = TRUE))
 for(state in pos$name){
   par(mar = c(0.2, 0.2, 1, 0))
   tmp <- dataUS[dataUS$Province_State == state, ]
   plot(tmp$newIncid7spline, sliding.window(tmp$ratio7I7s, pos = 7), col = dicCol[state], log = "xy", xlab = "", ylim = c(0.3, 3), xlim = c(10, 2000), type = "l", lwd = 2)
 
   #lines(tmp$newIncid7spline, sliding.window(tmp$ratio7I7, pos = 7), lwd = 1)
-  
 #  plot(tmp$date, tmp$newIncid7spline, type = "l")
   title(state)
 }
 
+# Plot the ratios, each state separately
 layout(matrix(1:50, ncol = 5))
 for(state in pos$name){
   par(mar = c(0.2, 0.2, 1, 0))
@@ -206,39 +219,100 @@ for(state in pos$name){
 dates <- sort(unique(dataUS$date))
 dates <- dates[dates <= Sys.Date() - 4]
 ops <- seq(0, 1, length.out = length(dates))^2
+maxOp <- 0.7 # max opacity
 
-thedate <- max(dates)
+idate <- which(dates == max(dates))
 
-# Subselect data until that date
-tmpp <- dataUS[dataUS$date <= thedate, ]
-
-layout(1)
-par(mar = c(6, 3, 3, 1), las = 1, 
-    mgp = c(2.5, 0.5, 0), tck = -0.01)
-plot(tmpp$newIncid7spline, tmpp$ratio7I7s, 
-     ylim = c(1/3, 3), xlim = c(10, 3000),
-     log = "xy", type = "n", xlab = "", ylab = "")
-mtext(side = 1, text = "7-d incidence, smoothed", line = 2)
-mtext(side = 2, text = "week-to-week ratio of 7-d smoothed incidence", line = 2, las = 3)
-abline(h = 1, lwd = 2)
-title(main = paste0("Cases in US states, ", thedate))
-
-mtext(side = 1, 
-      text = paste0("Data: https://github.com/CSSEGISandData/COVID-19/tree/master/csse_covid_19_data/csse_covid_19_daily_reports_us\nCode: "))
-for(state in pos$name){
-  tmp <- tmpp[tmpp$Province_State == state, ]
-  x <- tmp$newIncid7spline
-  y <- tmp$ratio7I7s
-  segments(x0 = head(x, -1), 
-           y0 = head(y, -1), 
-           x1 = tail(x, -1), 
-           y1 = tail(y, -1), 
-           col = vapply(1:nrow(tmp), function(i) adjustcolor(dicCol[state], 0.7 * tail(ops, nrow(tmp))[i]), FUN.VALUE = "x"))
+plotUSratio <- function(idate){
   
-  points(tail(x, 1), tail(y, 1), col = dicCol[state], cex = 3, pch = 16)
-  text(tail(x, 1), tail(y, 1), col = "white", labels = pos[pos$name == state, "state"], cex = 0.8)
+  # Get date
+  thedate <- dates[idate]
   
-#  lines(tmp$newIncid7spline, , col = dicCol[state], type = "p", pch = 16, cex = 0.8)
+  # Subselect data until that date
+  tmpp <- dataUS[dataUS$date <= thedate, ]
+
+  # Initialize plot
+  fname <- paste0("pics/phaseUSA_", formatC(idate, width=3, flag="0"), ".png")
+  png(fname, width = 8, height = 7, res = 300, units = "in")
+  
+  layout(1)
+  par(mar = c(5.5, 3.25, 3, 1), las = 1, 
+      mgp = c(2.5, 0.5, 0), tck = -0.01)
+  maxVal <- 3.5
+  plot(tmpp$newIncid7spline, tmpp$ratio7I7s, 
+       ylim = c(1/maxVal, maxVal), xlim = c(10, 3000),
+       log = "xy", type = "n", xlab = "", ylab = "")
+  # Axes labels
+  mtext(side = 1, text = "7-day incidence per 100'000, smoothed", line = 2)
+  mtext(side = 2, text = "week-to-week ratio of 7-d smoothed incidence", line = 2, las = 3)
+  
+  # Horizontal line for ratio = 1
+  abline(h = 1, lwd = 2) 
+  
+  title(main = paste0("Covid-19 cases in US states, ", thedate))
+  
+  # Credits
+  mtext(side = 1, 
+        text = paste0("Inspired by @trvrb https://twitter.com/trvrb/status/1483996719687684097?s=20&t=OZ7uBUmeGoc17OmML1xV0Q\nData: https://github.com/CSSEGISandData/COVID-19/tree/master/csse_covid_19_data/csse_covid_19_daily_reports_us\nCode: https://github.com/flodebarre/covid_indicateurs/blob/main/USA_phasePlots.Rmd"), family = "mono", col = gray(0.4), cex = 0.6, adj = 0, line = 4)
+  
+  
+  for(state in pos$name){
+    # Subset of the data for this state
+    tmp <- tmpp[tmpp$Province_State == state, ]
+    x <- tmp$newIncid7spline
+    y <- tmp$ratio7I7s
+    # Plot line with color gradient
+    segments(x0 = head(x, -1), 
+             y0 = head(y, -1), 
+             x1 = tail(x, -1), 
+             y1 = tail(y, -1), 
+             col = vapply(1:nrow(tmp), function(i) adjustcolor(dicCol[state], maxOp * tail(ops, nrow(tmp))[i]), FUN.VALUE = "x"))
+  }
+
+  # Doing this in a separate loop for the points to be above all the lines  
+  for(state in pos$name){
+    # Subset of the data for this state
+    tmp <- tmpp[tmpp$Province_State == state, ]
+    x <- tmp$newIncid7spline
+    y <- tmp$ratio7I7s
+    # Add final point with state short name
+    points(tail(x, 1), tail(y, 1), col = adjustcolor(dicCol[state], maxOp), cex = 3, pch = 16)
+    text(tail(x, 1), tail(y, 1), col = "white", labels = pos[pos$name == state, "state"], cex = 0.8)
+    
+  }
+  
+  dev.off()
+  
 }
+
+plotUSratio(which(dates == max(dates)))
+```
+
+```{r}
+prefix <- "pics/phaseUSA_"
+
+system(paste0("rm ", prefix, "*"))
+print(length(dates))
+# Plot the figure for each date
+for(iD in 15:length(dates)){
+  cat(dates[iD], " ")
+  plotUSratio(iD)
+}
+
+# Copy last pic
+for(j in 1:20){
+  system(paste0("cp ", prefix, formatC(iD, width=3, flag="0"), ".png", " ", prefix, formatC(iD, width=3, flag="0"), "_", j, ".png"))
+}
+
+# Copy first one
+for(j in 1:3){
+  system(paste0("cp ", prefix, iD, ".png", " ", prefix, "000_", j, ".png"))
+}
+
+# Convert into movie
+fmovie <- "pics/mapPhasePlotUSA.mp4"
+system(paste0("rm ", fmovie))
+system(paste0("ffmpeg -pattern_type glob -i '", prefix, "*", ".png' -vcodec libx264 -s 800x700 -pix_fmt yuv420p -filter:v 'setpts=5.0*PTS' ", fmovie))
+
 ```
 
