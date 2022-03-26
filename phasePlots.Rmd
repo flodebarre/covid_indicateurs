@@ -259,6 +259,8 @@ plotRatio(as.Date(tmp$jour), tmp$P)
 
 ```
 
+## Ratios regions
+
 ```{r compareRegions, fig.width=9, fig.height=12}
 
 palH <- rev(met.brewer("Hiroshige", n = 101, type = "continuous"))
@@ -593,35 +595,40 @@ system(paste0("ffmpeg -pattern_type glob -i 'pics/Ratio7Dep_", "*", ".png' -vcod
 minDate <- "2022-01-01"
 agCl <- 0
 
-tmpDep <- datDep[which(datDep$jour >= as.Date(minDate) - 14 & datDep$cl_age90 == agCl), ]
+dInitDate <- 14
+tmpDep <- datDep[which(datDep$jour >= as.Date(minDate) - dInitDate & datDep$cl_age90 == agCl), ]
 ```
 
 ```{r phasePlotDep_FunctionDefinition, fig.width=10.66, fig.height=6}
 endDates <- seq(as.Date(minDate), as.Date(max(tmpDep$jour)), by = "day")
 
+maxOp <- 0.7
+ops <- maxOp * seq(0, 1, length.out = nrow(tmpDep)/length(unique(tmpDep$dep)))^2 # Opacity values
+
 plotPhaseDep0 <- function(idate){
-  endDate <- endDates[idate]
+  endDate <- endDates[idate] # Get the corresponding date
   
+  # Subselect the data until this date
   tmpp <- tmpDep[tmpDep$jour <= endDate, ]
   
+  # Define output figure
   fname <- paste0("pics/phaseDep_", formatC(idate, width=3, flag="0"), ".png")
   png(fname, width = 10.6, height = 6, units = "in", res = 300)
-  layout(matrix(1:2, ncol = 2), widths = c(5, 1.5))
   
-  par(mar = c(6, 4, 2, 0), las = 1, mgp = c(2.5, 0.5, 0), tck = -0.01, bg = gray(1))
-  op <- 0.7 # color opacity
+  layout(matrix(1:2, ncol = 2), widths = c(5, 1.25))
   
+  par(mar = c(4.5, 3, 2, 0), las = 1, mgp = c(1.5, 0.3, 0), tck = -0.01, bg = gray(1), cex.axis = 0.8)
+
   # Initialize plot
   plot(1, type = "n", xlim = c(100, 5000), ylim = c(0.4, 4), log = "xy", 
        xlab = "7-day incidence per 100'000 inhabitants", ylab = "week-to-week ratio of 7-day incidence (log scale)")
   abline(h = 1, lwd = 2)
   limPlot <- par("usr")
   
-  
   mtext(side = 1, text = paste0("@flodebarre, ", Sys.Date(), ", inspired by @trvrb, @BristOliver, @VictimOfMaths
 Data: https://www.data.gouv.fr/fr/datasets/donnees-relatives-aux-resultats-des-tests-virologiques-covid-19/
 Code: https://github.com/flodebarre/covid_indicateurs/blob/main/phasePlots.Rmd
-"), adj = 0, cex = 0.5, family = "mono", line = 5.5, col = gray(0.4))
+"), adj = 0, cex = 0.5, family = "mono", line = 3.75, col = gray(0.4))
   
   
   for(i in geo.departements$code_departement[nchar(geo.departements$code_departement) < 3]){
@@ -648,14 +655,22 @@ Code: https://github.com/flodebarre/covid_indicateurs/blob/main/phasePlots.Rmd
     ratioIncid7 <- rep(NA, nend)
     ratioIncid7[8:nend] <- incid7[8:nend] / incid7[1:(nend - 7)]
     
-    
+    # Find points which are not NAs (to avoid interruptions)
     inna <- which(!is.na(incid7) & !is.na(ratios7))
+
+    segments(x0 = head(incid7[inna], -1), 
+             y0 = head(ratioIncid7[inna], -1), 
+             x1 = tail(incid7[inna], -1), 
+             y1 = tail(ratioIncid7[inna], -1), 
+             col = vapply(tail(ops, (length(inna) - 1)), function(op) adjustcolor(colReg[reg], op), FUN.VALUE = "x")
+    )
     
-    #lines(incid7[inna], ratios7[inna], col = "red", type = "l")
-    lines(incid7[inna], ratioIncid7[inna], col = adjustcolor(colReg[reg], op), type = "l")
+#    lines(incid7[inna], ratioIncid7[inna], col = adjustcolor(colReg[reg], op), type = "l")
     
-    points(x = incid7[nend], y = ratioIncid7[nend], col = adjustcolor(colReg[reg], op), cex = 2, pch = 16)
+    # Point at the final date to identify the departement
+    points(x = incid7[nend], y = ratioIncid7[nend], col = adjustcolor(colReg[reg], maxOp), cex = 2, pch = 16)
     
+    # Add departement number in the final point
     text(x = incid7[nend], y = ratioIncid7[nend], col = "white", cex = 0.45, labels = i, adj = c(0.5, 0.5))
     
     
@@ -691,21 +706,28 @@ plotPhaseDep0(length(endDates))
 
 ```{r phasePlotDep, fig.width=10.66, fig.height=6}
 length(endDates)
+system("rm pics/phaseDep_*")
 for(iD in seq_along(endDates)){
   print(iD)
   plotPhaseDep0(iD)
 }
 
-# paste0("pics/phaseDep_", formatC(idate, width=3, flag="0"), ".png")
+# Copy the last one to put it as first one (opening picture)
+system(paste0("cp ", "pics/phaseDep_", formatC(iD, width=3, flag="0"), ".png", " ",  "pics/phaseDep_000.png"))
 
 # Copy last pic
-for(j in 1:10){
+for(j in 1:20){
   system(paste0("cp pics/phaseDep_", formatC(iD, width=3, flag="0"), ".png", " pics/phaseDep_", formatC(iD, width=3, flag="0"), "_", j, ".png"))
+}
+
+# Copy first one
+for(j in 1:5){
+  system(paste0("cp pics/phaseDep_000.png", " pics/phaseDep_000_", j, ".png"))
 }
 
 # Convert into movie
 system("rm pics/mapPhasePlotDep.mp4")
-system(paste0("ffmpeg -pattern_type glob -i 'pics/phaseDep_", "*", ".png' -vcodec libx264 -s 800x450 -pix_fmt yuv420p -filter:v 'setpts=8.0*PTS' pics/mapPhasePlotDep.mp4"))
+system(paste0("ffmpeg -pattern_type glob -i 'pics/phaseDep_", "*", ".png' -vcodec libx264 -s 800x450 -pix_fmt yuv420p -filter:v 'setpts=5.0*PTS' pics/mapPhasePlotDep.mp4"))
 
 
 #system(paste0("open ", fname))
