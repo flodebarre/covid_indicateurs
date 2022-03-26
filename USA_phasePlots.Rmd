@@ -1,0 +1,244 @@
+---
+title: "R Notebook"
+output: html_notebook
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+dlData <- TRUE
+
+source("usefulFunctions.R")
+```
+
+# Load Data
+
+```{r downloadJHU}
+days <- seq(as.Date("2021-12-01"), Sys.Date(), by = "day") # Dates to be downloaded
+daysUS <- format(days, "%m-%d-%Y") # Version in US format
+
+dataUSlist <- list()
+
+if(dlData){
+  for(id in seq_along(daysUS)){
+    print(days[id])
+  
+    URL <- paste0("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_daily_reports_us/", daysUS[id], ".csv")
+    
+    download.file(URL, paste0("data/USA/casesUS_", days[id], ".csv"))
+  }
+}
+
+for(id in seq_along(days)){
+  fname <- paste0("data/USA/casesUS_", days[id], ".csv")
+  if(file.exists(fname)){
+    tmp <- read.csv(fname)
+    tmp$date <- days[id]
+    tmp <- tmp[, c("date", "Province_State", "Confirmed", "Deaths", "Incident_Rate", "Total_Test_Results")]
+    dataUSlist[[id]] <- tmp
+  }
+}
+
+dataUS <- do.call("rbind", dataUSlist)
+
+# Check we have all states, written the same way
+cbind(unique(dataUS$Province_State), is.element(unique(dataUS$Province_State), pos$name))
+# Select the main states
+dataUS <- dataUS[is.element(dataUS$Province_State, pos$name), ]
+
+write.csv(dataUS, "data/USA/combinedDailyData.csv", row.names = FALSE)
+```
+
+
+```{r defineStateColors}
+
+# List of US states and geographic positions
+pos <- read.csv("data/USA/USstates.csv")
+
+# Show tile map
+plot(pos$tile_column, -pos$tile_line, type = "n")
+text(pos$tile_column, -pos$tile_line, labels = pos$state)
+
+# Show state centroids
+plot(pos$longitude, pos$latitude, type = "n")
+text(pos$longitude, pos$latitude, labels = pos$state)
+
+# Get ranks of the different states
+pos$longOrder <- rank(pos$longitude, ties.method = "first")
+pos$latOrder <- rank(pos$latitude, ties.method = "first")
+
+# Show state lat/long ranks
+plot(pos$longOrder, pos$latOrder, type = "n")
+text(pos$longOrder, pos$latOrder, labels = pos$state)
+
+# Define color gradients
+gg <- expand.grid(x = 1:50, y = 1:50)
+x0 <- 0.
+y0 <- 0.
+gg$col <- rgb(x0 + (1-x0) * gg$x/50, 0., y0 + (1 - y0) * gg$y/50)
+plot(gg$x, gg$y, col = gg$col, pch = 15, cex = 0.8)
+getCol <- function(ix, iy){
+  gg[gg$x == ix & gg$y == iy, "col"]
+}
+pos$col <- vapply(1:nrow(pos), function(i) getCol(pos$longOrder[i], pos$latOrder[i]), FUN.VALUE = "x")
+
+# Show state ranks with color
+plot(pos$longOrder, pos$latOrder, type = "n")
+text(pos$longOrder, pos$latOrder, labels = pos$state, col = pos$col)
+
+# Create color dictionnary
+dicCol <- pos$col
+names(dicCol) <- pos$name
+```
+
+```{r}
+# Quality check
+# 1) Check that all states have all dates
+all(aggregate(dataUS$Confirmed, by = list(date = dataUS$date), FUN = length)$x == 50)
+
+# 2) Check that dates are consecutive
+all(diff(unique(as.Date(dataUS$date))) == 1)
+```
+
+# Define ratios
+
+```{r defineRatios}
+newdatUS <- data.frame(date = c())
+
+dataUS$newCases <- NA
+dataUS$newIncidence <- NA
+dataUS$newIncid7 <- NA
+dataUS$ratio7I7 <- NA
+dataUS$newIncid7spline <- NA
+dataUS$ratio7I7s <- NA
+
+dataStates <- list()
+
+for(istate in 1:50){
+  ii <- which(dataUS$Province_State == pos[istate, "name"])
+  tmp <- dataUS[ii, ]
+  # Check that dates are consecutive
+  stopifnot(all(diff(tmp$date) == 1))
+  # Compute new cases
+  tmp$newCases <- c(NA, diff(tmp$Confirmed))
+  # Compute new incidence
+  tmp$newIncidence <- c(NA, diff(tmp$Incident_Rate))
+  # Compute 7-d new incidence
+  tmp$newIncid7 <- sliding.window(tmp$newIncidence, pos = 7, FUN = mean, na.rm = TRUE) * 7
+  # Compute week-to-week incidence ratio
+  tmp$ratio7I7 <- NA
+  tmp$ratio7I7[8:nrow(tmp)] <- tmp$newIncid7[8:nrow(tmp)] / tmp$newIncid7[8:nrow(tmp) - 7]
+  
+  # Compute smoother 7-d incidence
+  tmp$newIncid7spline <- c(rep(NA, 7), smooth.spline(tmp$newIncid7[8:nrow(tmp)], spar = 0.7)$y)
+  
+  # Compute week-to-week incidence ratio on smoothed data
+  tmp$ratio7I7s <- NA
+  tmp$ratio7I7s[8:nrow(tmp)] <- tmp$newIncid7spline[8:nrow(tmp)] / tmp$newIncid7spline[8:nrow(tmp) - 7]
+
+    
+  # Add to the original dataset
+  for(cl in c("newCases", "newIncidence", "newIncid7", "ratio7I7", "newIncid7spline", "ratio7I7s")){
+      dataUS[ii, cl] <- tmp[, cl]
+  }
+}
+```
+
+# Plot
+
+```{r testPlots}
+range(dataUS$ratio7I7, na.rm = TRUE)
+
+plot(dataUS$date, dataUS$newIncid7)
+
+layout(1)
+par(mar = c(5, 3, 3, 1))
+plot(dataUS$newIncid7spline, dataUS$ratio7I7s, 
+     ylim = c(0.1, 5), xlim = c(5, 3000),
+     log = "xy", type = "n")
+for(state in pos$name){
+  tmp <- dataUS[dataUS$Province_State == state & dataUS$date <= "2022-03-22", ]
+  lines(tmp$newIncid7spline, tmp$ratio7I7s, col = dicCol[state], type = "p", pch = 16, cex = 0.8)
+}
+
+layout(matrix(1:50, ncol = 5))
+for(state in pos$name){
+  par(mar = c(0.2, 0.2, 1, 0))
+  tmp <- dataUS[dataUS$Province_State == state, ]
+  plot(tmp$newIncid7spline, sliding.window(tmp$ratio7I7s, pos = 7), col = dicCol[state], log = "xy", xlab = "", ylim = c(0.3, 3), xlim = c(10, 2000), type = "l", lwd = 2)
+
+  #lines(tmp$newIncid7spline, sliding.window(tmp$ratio7I7, pos = 7), lwd = 1)
+  
+#  plot(tmp$date, tmp$newIncid7spline, type = "l")
+  title(state)
+}
+
+layout(matrix(1:50, ncol = 5))
+for(state in pos$name){
+  par(mar = c(0.2, 0.2, 1, 0))
+  tmp <- dataUS[dataUS$Province_State == state, ]
+  plot(as.Date(tmp$date), sliding.window(tmp$ratio7I7s, pos = 7), col = dicCol[state], log = "y", xlab = "", ylim = c(0.1, 3), type = "l")
+
+  lines(as.Date(tmp$date), tmp$ratio7I7s, lwd = 1, col = 3)
+  lines(as.Date(tmp$date), sliding.window(tmp$ratio7I7, pos = 7), lwd = 2)
+  
+#  plot(tmp$date, tmp$newIncid7spline, type = "l")
+  title(state)
+}
+
+
+layout(matrix(1:50, ncol = 5))
+for(state in pos$name){
+  par(mar = c(0.2, 0.2, 1, 0))
+  tmp <- dataUS[dataUS$Province_State == state, ]
+  plot(as.Date(tmp$date), tmp$newIncid7spline, col = dicCol[state], log = "y", xlab = "", ylim = c(1, 3000), type = "l")
+
+#  plot(tmp$date, tmp$newIncid7spline, type = "l")
+  title(state)
+}
+
+```
+
+## Final plot
+
+```{r}
+
+dates <- sort(unique(dataUS$date))
+dates <- dates[dates <= Sys.Date() - 4]
+ops <- seq(0, 1, length.out = length(dates))^2
+
+thedate <- max(dates)
+
+# Subselect data until that date
+tmpp <- dataUS[dataUS$date <= thedate, ]
+
+layout(1)
+par(mar = c(6, 3, 3, 1), las = 1, 
+    mgp = c(2.5, 0.5, 0), tck = -0.01)
+plot(tmpp$newIncid7spline, tmpp$ratio7I7s, 
+     ylim = c(1/3, 3), xlim = c(10, 3000),
+     log = "xy", type = "n", xlab = "", ylab = "")
+mtext(side = 1, text = "7-d incidence, smoothed", line = 2)
+mtext(side = 2, text = "week-to-week ratio of 7-d smoothed incidence", line = 2, las = 3)
+abline(h = 1, lwd = 2)
+title(main = paste0("Cases in US states, ", thedate))
+
+mtext(side = 1, 
+      text = paste0("Data: https://github.com/CSSEGISandData/COVID-19/tree/master/csse_covid_19_data/csse_covid_19_daily_reports_us\nCode: "))
+for(state in pos$name){
+  tmp <- tmpp[tmpp$Province_State == state, ]
+  x <- tmp$newIncid7spline
+  y <- tmp$ratio7I7s
+  segments(x0 = head(x, -1), 
+           y0 = head(y, -1), 
+           x1 = tail(x, -1), 
+           y1 = tail(y, -1), 
+           col = vapply(1:nrow(tmp), function(i) adjustcolor(dicCol[state], 0.7 * tail(ops, nrow(tmp))[i]), FUN.VALUE = "x"))
+  
+  points(tail(x, 1), tail(y, 1), col = dicCol[state], cex = 3, pch = 16)
+  text(tail(x, 1), tail(y, 1), col = "white", labels = pos[pos$name == state, "state"], cex = 0.8)
+  
+#  lines(tmp$newIncid7spline, , col = dicCol[state], type = "p", pch = 16, cex = 0.8)
+}
+```
+
