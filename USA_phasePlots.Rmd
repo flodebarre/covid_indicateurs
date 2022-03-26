@@ -255,6 +255,13 @@ plotUSratio <- function(idate){
   mtext(side = 1, 
         text = paste0("Inspired by @trvrb https://twitter.com/trvrb/status/1483996719687684097?s=20&t=OZ7uBUmeGoc17OmML1xV0Q\nData: https://github.com/CSSEGISandData/COVID-19/tree/master/csse_covid_19_data/csse_covid_19_daily_reports_us\nCode: https://github.com/flodebarre/covid_indicateurs/blob/main/USA_phasePlots.Rmd"), family = "mono", col = gray(0.4), cex = 0.6, adj = 0, line = 4)
   
+  # Add annotation
+  limPlot <- par("usr")
+  colT <- gray(0.5)
+  text(x = 10^(limPlot[1]), y = 10^(limPlot[3]), adj = c(-0.1, -1), labels = "Cases decrease ←", col = colT)
+  text(x = 10^(limPlot[1]), y = 10^(limPlot[4]), adj = c(-0.1, 2), labels = "Cases increase →", col = colT)
+  
+  # Plot each state separately
   
   for(state in pos$name){
     # Subset of the data for this state
