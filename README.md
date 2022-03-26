@@ -1,4 +1,6 @@
-# Indicateurs hospitaliers COVID
+# Contents   
+
+## Indicateurs hospitaliers COVID
 
 Code pour tracer les indicateurs rendus publics sur <https://www.data.gouv.fr/fr/datasets/synthese-des-indicateurs-de-suivi-de-lepidemie-covid-19/>, au cours du temps, en coordonnées polaires. 
 
@@ -8,3 +10,8 @@ Le code contient au début une option (`doGif`) pour générer ou non une animat
 
 Sorties : dans `pics/`  
 Attention :attention:, le `.gif` n'est pas forcément aussi récent que les `.png`. 
+
+## phase plot USA
+
+https://github.com/flodebarre/covid_indicateurs/blob/main/pics/mapPhasePlotUSA.mp4?raw=true 
+
