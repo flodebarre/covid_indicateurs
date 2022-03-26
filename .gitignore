@@ -28,3 +28,4 @@ vignettes/*.pdf
 .Renviron
 Rplot01.png
 .DS_Store
+pics/*_*.png
