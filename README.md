@@ -15,3 +15,5 @@ Attention :attention:, le `.gif` n'est pas forcément aussi récent que les `.pn
 
 https://github.com/flodebarre/covid_indicateurs/blob/main/pics/mapPhasePlotUSA.mp4?raw=true 
 
+https://raw.githubusercontent.com/flodebarre/covid_indicateurs/main/pics/mapPhasePlotUSA.mp4
+
