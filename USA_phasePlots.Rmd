@@ -53,6 +53,8 @@ for(id in seq_along(days)){
 
 dataUS <- do.call("rbind", dataUSlist)
 
+# List of US states and geographic positions
+pos <- read.csv("data/USA/USstates.csv")
 
 # Check we have all states, written the same way
 cbind(unique(dataUS$Province_State), is.element(unique(dataUS$Province_State), pos$name))
@@ -65,9 +67,6 @@ write.csv(dataUS, "data/USA/combinedDailyData.csv", row.names = FALSE)
 
 
 ```{r defineStateColors}
-# List of US states and geographic positions
-pos <- read.csv("data/USA/USstates.csv")
-
 # Show tile map
 plot(pos$tile_column, -pos$tile_line, type = "n")
 text(pos$tile_column, -pos$tile_line, labels = pos$state)
@@ -233,7 +232,7 @@ plotUSratio <- function(idate){
 
   # Initialize plot
   fname <- paste0("pics/phaseUSA_", formatC(idate, width=3, flag="0"), ".png")
-  png(fname, width = 8, height = 7, res = 300, units = "in")
+  png(fname, width = 8, height = 8, res = 300, units = "in")
   
   layout(1)
   par(mar = c(5.5, 3.25, 3, 1), las = 1, 
@@ -319,7 +318,7 @@ for(j in 1:3){
 # Convert into movie
 fmovie <- "pics/mapPhasePlotUSA.mp4"
 system(paste0("rm ", fmovie))
-system(paste0("ffmpeg -pattern_type glob -i '", prefix, "*", ".png' -vcodec libx264 -s 800x700 -pix_fmt yuv420p -filter:v 'setpts=5.0*PTS' ", fmovie))
+system(paste0("ffmpeg -pattern_type glob -i '", prefix, "*", ".png' -vcodec libx264 -s 800x800 -pix_fmt yuv420p -filter:v 'setpts=5.0*PTS' ", fmovie))
 
 ```
 
