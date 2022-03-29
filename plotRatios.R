@@ -5,6 +5,8 @@ dlData <- TRUE # Whether to download the data
 
 source("usefulFunctions.R") # Load sliding average function
 
+fname <- "pics/ratiosFrance.png" # output name
+
 # Load data ####
 
 # Source: https://www.data.gouv.fr/fr/datasets/synthese-des-indicateurs-de-suivi-de-lepidemie-covid-19/
@@ -80,7 +82,6 @@ maxDate <- max(dat$date) # max date in the plot
 ylm <- c(0.5, 3) # y range
 lang <- "FR" # Language (EN is work in progress)
 
-fname <- "pics/ratiosFrance.png" # output name
 png(filename = fname, width = 10.66, height = 6, units = "in", res = 300)
 
 par(mgp = c(2.5, 0.5, 0.5), las = 1, 
@@ -175,13 +176,21 @@ colTest <- gray(0)
 colRes <- gray(0.5)
 
 # Curve for 7-d average of the ratios
+par(xpd = FALSE)
 opC <- 0.7
-lines(dat$date[1:n2], sliding.window(dat$ratio7_dateTest[1:n2]), col = adjustcolor(colTest, opC))
-lines(dat$date, sliding.window(dat$ratio7_dateRes), col = adjustcolor(colRes, opC))
+dat2 <- dat[dat$date >= minDate & dat$date <= maxDate, ]
+if(all(is.na(tail(dat2$ratio7_dateTest, 2)))){
+  n2 <- nrow(dat2) - 2
+}
+
+lines(dat2$date[1:n2], sliding.window(dat2$ratio7_dateTest[1:n2]), col = adjustcolor(colTest, opC))
+lines(dat2$date, sliding.window(dat2$ratio7_dateRes), col = adjustcolor(colRes, opC))
 
 # Points!
-points(dat$date, dat$ratio7_dateTest, pch = pchTest, col = colTest)
-points(dat$date, dat$ratio7_dateRes, pch = pchRes, col = colRes, cex = 1.1)
+points(dat2$date, dat2$ratio7_dateTest, pch = pchTest, col = colTest)
+points(dat2$date, dat2$ratio7_dateRes, pch = pchRes, col = colRes, cex = 1.1)
+
+rm(dat2)
 
 # Legend of the points
 legend(as.Date((limPlot[1]+limPlot[2])/2, origin = "1970-01-01"), ylm[2], horiz = TRUE, 
