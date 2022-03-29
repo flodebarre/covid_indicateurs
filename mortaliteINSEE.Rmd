@@ -1,0 +1,404 @@
+---
+title: "R Notebook"
+output: html_notebook
+editor_options: 
+  chunk_output_type: console
+---
+
+Source: <https://www.insee.fr/fr/statistiques/4487988?sommaire=4487854>
+
+```{r}
+dat1 <- read.csv("data/INSEE_2022-03-25_deces_sexe_age_lieu_csv/2022-03-24_deces_parlieu_jour_France.csv", sep = ";", fileEncoding = "latin1")
+
+
+# Clean dates
+dts <- as.data.frame(matrix(unlist(strsplit(dat1$Date_evenement, split = c("-"))), byrow = TRUE, ncol = 2))
+names(dts) <- c("jour", "mois")
+
+dicoMois <- formatC(x = 1:12, width = 2, flag = 0)
+names(dicoMois) <- unique(dts[, 2])
+dicoMois
+
+dat1$month <- dicoMois[dts$mois]
+dat1$day <- dts$jour
+
+
+# Compute daily deaths
+for(col in names(dat1)[2:16]){
+  dat1[, paste0("dailyDeaths_", col)] <- c(dat1[1, col], diff(dat1[, col]))
+}
+
+mm <- mM <- c()
+for(col in names(dat1)[2:16]){
+  mM <- c(mM, max(dat1[, paste0("dailyDeaths_", col)], na.rm = TRUE))
+  mm <- c(mm, min(dat1[, paste0("dailyDeaths_", col)], na.rm = TRUE))
+}
+max(mM)
+min(mm)
+yM <- max(mM)
+ym <- min(mm)
+
+plot(0, type = "n", xlim = as.Date(c("2019-01-01", "2022-03-01")), ylim = c(0, 1.05*yM))
+for(yr in c(2019, 2021, 2022)){
+  for(loc in c("Hopital_Clinique", "Maison_retraite", "Domicile", "Autre")){
+    points(as.Date(paste0(yr, "-", dat1$month, "-", dat1$day)), dat1[, paste0("dailyDeaths_", loc, "_Deces", yr)])
+  }
+}
+
+
+  points(as.Date(paste0(yr, "-", dat1$month, "-", dat1$day)), dat1$dailyDeaths_Maison_retraite_Deces2019, ylim = c(0, yM))
+  points(as.Date(paste0(yr, "-", dat1$month, "-", dat1$day)), dat1$dailyDeaths_Domicile_Deces2019, ylim = c(0, yM))
+  points(as.Date(paste0(yr, "-", dat1$month, "-", dat1$day)), dat1$dailyDeaths_Autre_Deces2019, ylim = c(0, yM))  
+
+
+head(dat1)
+names(dat1)
+```
+
+
+```{r}
+# Code geographique
+# Source: https://www.insee.fr/fr/information/6051727
+coms <- read.csv("data/commune_2022.csv")
+dim(coms)
+head(coms)
+
+# Create dictionary
+dicComReg <- coms$REG
+names(dicComReg) <- coms$COM
+
+# Regions
+regs <- read.csv("data/region_2022.csv")
+dicReg <- regs$LIBELLE
+names(dicReg) <- regs$REG
+```
+
+```{r}
+# Define colors
+library("MetBrewer")
+cols <- met.brewer("Kandinsky", 6)[1:5]
+names(cols) <- c("HopCli", "HosMar", "Logem", "Autres", "Non renseigne")
+
+# Rename columns
+dicoNames <- c("Hopital ou Clinique", "Maison de retraite", "Domicile", "Autre", "Non renseigné")
+names(dicoNames) <- names(cols)
+```
+
+```{r}
+# Load data
+DC2018 <- read.csv("data/INSEE_2022-03-25_detail_mortalite/DC_2018_det.csv", sep = ";")
+DC2019 <- read.csv("data/INSEE_2022-03-25_detail_mortalite/DC_2019_det.csv", sep = ";")
+DC2020 <- read.csv("data/INSEE_2022-03-25_detail_mortalite/DC_2020_det.csv", sep = ";")
+DC2021 <- read.csv("data/INSEE_2022-03-25_detail_mortalite/DC_20212022_det.csv", sep = ";")
+
+dat <- do.call("rbind", list(DC2018, DC2019, DC2020, DC2021))
+dim(dat)
+# Clean memory
+rm(DC2018, DC2019, DC2020, DC2021)
+
+# Add geographic information
+dat$codeRegion <- dicComReg[dat$COMDOM]
+dat$nomRegion <- dicReg[as.character(dat$codeRegion)]
+
+# Reformat date
+dat$dateDC <- as.Date(paste0(dat$ADEC, "-", formatC(dat$MDEC, width = 2, flag = 0), "-", formatC(dat$JDEC, width = 2, flag = 0)))
+```
+
+
+```{r}
+# Aggregate the data at the level of the whole country
+datAgg <- aggregate(dat$LIEUDEC2, by = list(lieu = dat$LIEUDEC2, dateDC = dat$dateDC), FUN = length)
+datAggTot <- aggregate(dat$LIEUDEC2, by = list(dateDC = dat$dateDC), FUN = length)
+
+unique(dat$COMDOM)
+
+
+dat[1,]
+# Make sure that all dates are present
+nn <- unique(table(datAgg$lieu))
+nn
+
+head(datAgg)
+
+
+# Check legend
+plot(datAgg$dateDC, datAgg$x)
+ points(as.Date(paste0(2019, "-", dat1$month, "-", dat1$day)), dat1[, paste0("dailyDeaths_", "Hopital_Clinique", "_Deces", 2019)], col = 2)
+ points(as.Date(paste0(2019, "-", dat1$month, "-", dat1$day)), dat1[, paste0("dailyDeaths_", "Maison_retraite", "_Deces", 2019)], col = 3)
+ points(as.Date(paste0(2019, "-", dat1$month, "-", dat1$day)), dat1[, paste0("dailyDeaths_", "Domicile", "_Deces", 2019)], col = 4)
+ points(as.Date(paste0(2019, "-", dat1$month, "-", dat1$day)), dat1[, paste0("dailyDeaths_", "Autre", "_Deces", 2019)], col = 5)
+
+plot(datAggTot$dateDC, datAggTot$x, ylim = c(0, max(datAggTot$x)))
+
+# Initialize plot
+plot(datAggTot$dateDC, datAggTot$x, ylim = c(0, max(datAggTot$x)), type = "n")
+
+xx <- unique(datAgg$dateDC)
+v <- rep(0, nn)
+for(lieu in rev(names(cols))){
+  tmp <- datAgg[datAgg$lieu == lieu, ]
+  # Make sure that all dates are consecutive
+  stopifnot(all(diff(tmp$dateDC)==1))
+  
+  polygon(c(xx, rev(xx), xx[1]), 
+          c(v, rev(v + tmp$x), v[1]), col = cols[lieu], lwd = 0.5)
+  
+  v <- v + tmp$x
+}
+
+```
+
+```{r}
+mnth <- seq(as.Date("2018-01-01"), max(dat$dateDC), by = "month")
+
+```
+
+```{r}
+
+
+reg <- "Île-de-France"
+fname <- paste0("pics/INSEE-DC_", reg, ".png")
+png(fname, width = 16, height = 9, units = "in", res = 300)
+# Subset of the data with this region
+subdat <- dat[dat$nomRegion == reg, ]
+
+# Aggregate
+datAgg <- aggregate(subdat$LIEUDEC2, by = list(lieu = subdat$LIEUDEC2, dateDC = subdat$dateDC), FUN = length)
+datAggTot <- aggregate(subdat$LIEUDEC2, by = list(dateDC = subdat$dateDC), FUN = length)
+
+# Initialize plot
+plot(datAggTot$dateDC, datAggTot$x, ylim = c(0, max(datAggTot$x)), type = "n", axes = FALSE, 
+     xlab = "", ylab = "")
+axis(1, pos = 0, at = mnth, labels = format(mnth, "%b\n%Y"), padj = 0.5)
+axis(2, pos = min(mnth), las = 1)
+mtext(side = 2, las = 3, text = "Nombres de décès quotidiens")
+xx <- unique(datAgg$dateDC)
+xxd <- data.frame(dateDC = xx) # as data frame
+v <- rep(0, nn)
+for(lieu in rev(names(cols))){
+  tmp <- datAgg[datAgg$lieu == lieu, ]
+  # Make sure that all dates are consecutive
+  if(!all(diff(tmp$dateDC)==1)){
+    # If not, add the missing days as NAs
+    tmp <- merge(tmp, xxd, by = "dateDC", all = TRUE)
+    tmp[is.na(tmp$x), "x"] <- 0
+  }
+  
+  polygon(c(xx, rev(xx), xx[1]), 
+          c(v, rev(v + tmp$x), v[1]), col = cols[lieu], lwd = 0.5)
+  
+  v <- v + tmp$x
+}
+legend(x = min(mnth)+10, y = max(v), col = cols, legend = dicoNames[names(cols)], pch = 15, title = "Lieux de décès", pt.cex = 3, y.intersp = 1.5, x.intersp = 1.5, box.lwd = 0)
+title(main = reg)
+
+dev.off()
+system(paste0("open ", fname))
+```
+
+```{r}
+# Load population sizes
+# Source: https://www.insee.fr/fr/statistiques/2012713
+popDep <- read.csv("data/INSEE_popDep.csv")
+head(popDep)
+popReg <- read.csv("data/INSEE_popRegion.csv")
+head(popReg)
+```
+
+```{r}
+source("polarFunctions.R")
+
+# Define colors
+colYear <- met.brewer("Egypt", 5, "continuous")[c(2, 3, 1, 4, 5)]
+names(colYear) <- seq(2018, 2022)
+
+
+codereg <- 11
+
+plotRegionDC <- function(codereg){
+  reg <- dicReg[as.character(codereg)]
+  
+  # Subset of the data for this locality
+  subdat <- dat[dat$nomRegion == reg, ]
+  
+  # Aggregate by day
+  agg <- aggregate(subdat$LIEUDEC2, by = list(dateDC = subdat$dateDC), FUN = length)
+  agg$yearDC <- substr(agg$dateDC, 1, 4)
+  
+  # Number of days in the year
+  agg$nDays <- 365
+  agg$nDays[agg$yearDC == 2020] <- 366
+  # Date as fraction of the year
+  agg$fracYear <- as.numeric((agg$dateDC - as.Date(paste0(agg$yearDC, "-01-01"))) / agg$nDays)
+  
+  # Get population size
+  pops <- popReg[which(popReg$CodeRegion == codereg), ]
+  pop <- rep(pops$pop2022, nrow(agg)) # Use the 2022 population estimation for 2021 and 2022
+  pop[agg$yearDC < 2021] <- pops$pop2019 # Use the 2019 population estimation for 2018, 2019, 2020
+  
+  # Compute sliding average 
+  stopifnot(all(diff(agg$dateDC) == 1))
+  agg$nDC7ave <- sliding.window(agg$x)
+  
+  # Get point color from year
+  agg$col <- colYear[agg$yearDC]
+  factor <- 10^6
+  pxy <- polar2xy(agg$nDC7ave / pop * factor, agg$fracYear)
+  
+  # Initialize plot
+  par(pty = "s", xpd = FALSE)
+  par(mar = c(0, 0, 1.5, 0) + 1)
+  maxval <- 57
+  plot(0, type = "n", xlim = c(-maxval, maxval), ylim = c(-maxval, maxval), axes = FALSE, xlab = "", ylab = "")
+  
+  lwd.grad <- 1
+  for(i in seq(10, 60, by = 10)){
+    cxy <- polar2xy(i, seq(0, 1, length.out = 100))
+    lines(cxy$x, cxy$y, type = "l", col = "gray", lwd = lwd.grad)
+  }
+  
+  par(xpd = TRUE)
+  segments(x0 = head(pxy$x, -1), 
+           y0 = head(pxy$y, -1),
+           x1 = tail(pxy$x, -1),
+           y1 = tail(pxy$y, -1), asp = 1, 
+       pch = 16, col = agg$col, lwd = 2)
+  
+  title(main = reg)
+}
+
+
+layout.show(15)
+regions <- c(32, 
+             28, 11, 44, 
+             53, 24, 27, 
+             52, 84, 93, 
+             75, 76, 94)
+```
+
+
+```{r}
+fname <- "pics/INSEE_DC_regions.png"
+fac <- 2.5
+hh <- 0.2
+png(fname, width = fac*3, height = fac*(5+2*hh), units = "in", res = 300)
+layout(matrix(c(rep(16, 3), 2, 3, 2, 4:15, rep(17, 3))-2, byrow = TRUE, ncol = 3), heights = c(hh, rep(1, 5), 0.2))
+layout.show(15)
+for(codereg in regions){
+    par(pty = "s", xpd = FALSE)
+  par(mar = c(0, 0, 1.5, 0) + 1)
+#  plotRegionDC(codereg)
+  plot(0, axes = FALSE, xlab = "", ylab = "")
+  title(codereg)
+}
+par(mar = rep(0.1, 4), pty = "m")
+plot(0, axes = FALSE, xlab = "", ylab = "", type = "n", xlim = c(-1, 1), ylim = c(-1, 1))
+cexx <- 2
+txt <- "Taux de mortalité par région, en "
+text(0, 0, adj = c(0.5, 0.5), cex = cexx, labels = expression("Taux de mortalité par région, en " * phantom("2018") * ", " * phantom("2019") * ", " * phantom("2020") * ", " * phantom("2021") * ", et" * phantom("2022") * "(partiel)"))
+text(0, 0, adj = c(0.5, 0.5), cex = cexx, labels = expression(phantom("Taux de mortalité par région, en ") * phantom("2018") * phantom(", ") * phantom("2019") * phantom(", ") * phantom("2020") * phantom(", ") * phantom("2021") * phantom(", et") * phantom("2022") * phantom("(partiel)")))
+text(0, 0, adj = c(0.5, 0.5), cex = cexx, labels = expression(phantom("Taux de mortalité par région, en ") *"2018" * phantom(", ") * phantom("2019") * phantom(", ") * phantom("2020") * phantom(", ") * phantom("2021") * phantom(", et") * phantom("2022") * phantom("(partiel)")), col = colYear["2018"])
+text(0, 0, adj = c(0.5, 0.5), cex = cexx, labels = expression(phantom("Taux de mortalité par région, en ") * phantom("2018") * phantom(", ") *"2019" * phantom(", ") * phantom("2020") * phantom(", ") * phantom("2021") * phantom(", et") * phantom("2022") * phantom("(partiel)")), col = colYear["2019"])
+text(0, 0, adj = c(0.5, 0.5), cex = cexx, labels = expression(phantom("Taux de mortalité par région, en ") * phantom("2018") * phantom(", ") * phantom("2019") * phantom(", ") *"2020" * phantom(", ") * phantom("2021") * phantom(", et") * phantom("2022") * phantom("(partiel)")), col = colYear["2020"])
+text(0, 0, adj = c(0.5, 0.5), cex = cexx, labels = expression(phantom("Taux de mortalité par région, en ") * phantom("2018") * phantom(", ") * phantom("2019") * phantom(", ") * phantom("2020") * phantom(", ") *"2021" * phantom(", et") * phantom("2022") * phantom("(partiel)")), col = colYear["2021"])
+text(0, 0, adj = c(0.5, 0.5), cex = cexx, labels = expression(phantom("Taux de mortalité par région, en ") * phantom("2018") * phantom(", ") * phantom("2019") * phantom(", ") * phantom("2020") * phantom(", ") * phantom("2021") * phantom(", et ") *"2022" * phantom(" (partiel)")), col = colYear["2022"])
+
+
+par(mar = rep(0.1, 4), pty = "m")
+plot(0, axes = FALSE, xlab = "", ylab = "", type = "n", xlim = c(-1, 1), ylim = c(-1, 1))
+text(-1, 1, adj = c(0, 1), labels = "Données INSEE mars 2022, https://www.insee.fr/fr/statistiques/4487988?sommaire=4487854\nCode: ", family = "mono", cex = 1, col = gray(0.5))
+
+dev.off()
+system(paste0("open ", fname))
+
+```
+
+```{r}
+
+```
+
+
+```{r}
+# 1 Plot legend (no)
+par(mar = c(0, 0, 0, 0))
+plot(0, 0, xlab = "", ylab = "", type = "n", axes = FALSE, xlim = c(-0.2, 1), ylim = c(-1, 0.5))
+legend(x = -0.15, y = 0, 
+         col = c(col452R, colAC, colD), 
+         pch = c(16, pchAC, pchD), 
+         legend = c("non-L452R", "non-E484K & non-L452R", "D1"), 
+         box.lwd = -1, cex = 1.2)
+
+# 2 HDF
+#layout(1)
+marplot <- c(2, 2, 2, 2)
+par(mar = marplot)
+plotCompareTargetsReg("Hauts-de-France")
+
+
+# 3 Plot credits
+par(mar = c(0, 0, 0, 0))
+plot(0, 0, xlab = "", ylab = "", type = "n", axes = FALSE, xlim = c(-0.1, 1), ylim = c(-1, 1))
+text(0, 0, paste0("@flodebarre, ", max(dat.France$date2, na.rm = TRUE) + 3, "
+
+Data:
+https://www.data.gouv.fr/fr/datasets/
+donnees-de-laboratoires-pour-le-
+depistage-indicateurs-sur-les-mutations/
+and 
+https://www.data.gouv.fr/fr/datasets/
+donnees-relatives-aux-resultats-des-
+tests-virologiques-covid-19/
+
+Code: https://github.com/flodebarre/
+nouveauCriblage/blob/main/scripts/mutations.Rmd
+"), adj = 0, cex = 0.6, family = "mono")
+
+par(mar = marplot)
+
+# 4 NOR
+plotCompareTargetsReg("Normandie")
+
+# 5 IDF
+# 
+#layout(1)
+plotCompareTargetsReg("Ile-de-France")
+
+# 6 GE
+plotCompareTargetsReg("Grand Est")
+
+# 7 BRE
+plotCompareTargetsReg("Bretagne")
+
+# 8 CVL
+plotCompareTargetsReg("Centre-Val de Loire")
+
+# 9 BFC
+plotCompareTargetsReg("Bourgogne-Franche-Comté")
+
+# 10 PDL
+plotCompareTargetsReg("Pays de la Loire")
+
+# 11 ARA
+plotCompareTargetsReg("Auvergne-Rhône-Alpes")
+
+# 12 PACA
+plotCompareTargetsReg("Provence-Alpes-Côte d'Azur")
+
+# 13 NAQ
+plotCompareTargetsReg("Nouvelle-Aquitaine")
+
+# 14 OCC
+plotCompareTargetsReg("Occitanie")
+
+# 15 COR
+plotCompareTargetsReg("Corse")
+```
+
+
+```{r}
+par(pty = "m")
+plot(c(NA, agg$dateDC), c(0, agg$nDC7ave) / pop * factor, col = agg$col)
+
+
+```
+
