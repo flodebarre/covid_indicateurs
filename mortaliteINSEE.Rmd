@@ -78,6 +78,14 @@ names(dicComReg) <- coms$COM
 regs <- read.csv("data/region_2022.csv")
 dicReg <- regs$LIBELLE
 names(dicReg) <- regs$REG
+
+# Departements
+dicComDep <- coms$DEP
+names(dicComDep) <- coms$COM
+
+deps <- read.csv("data/departement_2022.csv")
+dicDep <- deps$LIBELLE
+names(dicDep) <- deps$DEP
 ```
 
 ## Colors
@@ -110,6 +118,9 @@ rm(DC2018, DC2019, DC2020, DC2021)
 # Add geographic information
 dat$codeRegion <- dicComReg[dat$COMDOM]
 dat$nomRegion <- dicReg[as.character(dat$codeRegion)]
+
+dat$codeDep <- dicComDep[dat$COMDOM]
+dat$nomDep <- dicDep[dat$codeDep]
 
 # Reformat date
 dat$dateDC <- as.Date(paste0(dat$ADEC, "-", formatC(dat$MDEC, width = 2, flag = 0), "-", formatC(dat$JDEC, width = 2, flag = 0)))
@@ -162,7 +173,6 @@ for(lieu in rev(names(cols))){
 
 ```{r}
 mnth <- seq(as.Date("2018-01-01"), max(dat$dateDC), by = "month")
-
 ```
 
 ```{r}
@@ -229,17 +239,22 @@ source("usefulFunctions.R")
 colYear <- met.brewer("Egypt", 5, "continuous")[c(2, 3, 1, 4, 5)]
 names(colYear) <- seq(2018, 2022)
 
+codeLoc <- 11
 
-codereg <- 11
-
-plotRegionDC <- function(codereg, gradMax = 60){
-  # codereg: geographic numerical code of the region
+plotDC <- function(codeLoc, gradMax = 60, localLevel = "region", mar = c(1, 1, 2.5, 1), cex.main = 1.5, factor.lwd = 1, cex.month = 0.7){
+  # codeLoc: geographic numerical code of the locality
   # gradMax: max value of the graduations
+  # localLevel: whether the number corresponds to a region, departement
   
-  reg <- dicReg[as.character(codereg)]
-  
-  # Subset of the data for this locality
-  subdat <- dat[dat$nomRegion == reg, ]
+  if(localLevel == "region"){
+    locName <- dicReg[as.character(codeLoc)]
+    # Subset of the data for this locality
+    subdat <- dat[dat$nomRegion == locName, ]
+  }
+  if(localLevel == "departement"){
+    locName <- dicDep[codeLoc]
+    subdat <- dat[dat$nomDep == locName, ]
+  }
   
   # Aggregate by day
   agg <- aggregate(subdat$LIEUDEC2, by = list(dateDC = subdat$dateDC), FUN = length)
@@ -262,7 +277,12 @@ plotRegionDC <- function(codereg, gradMax = 60){
   agg$nDC7ave <- sliding.window(agg$x)
 
   # Get population size
-  pops <- popReg[which(popReg$CodeRegion == codereg), ]
+  if(localLevel == "region"){
+    pops <- popReg[which(popReg$CodeRegion == codeLoc), ]
+  }
+  if(localLevel == "departement"){
+    pops <- popDep[which(popDep$CodeDep == codeLoc), ]
+  }
   pop <- rep(pops$pop2022, nrow(agg)) # Use the 2022 population estimation for 2021 and 2022
   pop[agg$yearDC < 2021] <- pops$pop2019 # Use the 2019 population estimation for 2018, 2019, 2020
   
@@ -273,7 +293,7 @@ plotRegionDC <- function(codereg, gradMax = 60){
   
   # Initialize plot
   par(pty = "s", xpd = FALSE)
-  par(mar = c(0, 0, 1.5, 0) + 1)
+  par(mar = mar)
   maxval <- gradMax
   plot(0, type = "n", xlim = c(-maxval, maxval), ylim = c(-maxval, maxval), axes = FALSE, xlab = "", ylab = "")
   
@@ -287,7 +307,7 @@ plotRegionDC <- function(codereg, gradMax = 60){
     days <- seq(months[i], months[i + 1], by = "day")
     arc <- polar2xy(gradMax, as.numeric(days - as.Date(paste0("2021-01-01"))) / 365)
     polygon(x = c(0, arc$x, 0), 
-            y = c(0, arc$y, 0), border = gray(0.95), col = gray(0.9), lwd = 0.5)
+            y = c(0, arc$y, 0), border = gray(0.95), col = gray(0.9), lwd = factor.lwd * 0.5)
   }
   
   # Month labels
@@ -296,14 +316,14 @@ plotRegionDC <- function(codereg, gradMax = 60){
   r <- gradMax - 5
   thetas <- (1:12)/12 - 0.5/12 # Angles of the months
   for(i in seq_along(monthLab)){
-    text(x = r * cos(frac2angle(thetas[i])), y = r * sin(frac2angle(thetas[i])), labels = monthLab[i], srt = 90 + 90 - thetas[i]*360 + orientation[i] * 180, col = gray(1), cex = 0.7, family = "sans")
+    text(x = r * cos(frac2angle(thetas[i])), y = r * sin(frac2angle(thetas[i])), labels = monthLab[i], srt = 90 + 90 - thetas[i]*360 + orientation[i] * 180, col = gray(1), cex = cex.month, family = "sans")
   }
   
   # Graduations
   lwd.grad <- 1
   for(i in seq(10, gradMax, by = 10)){
     cxy <- polar2xy(i, seq(0, 1, length.out = 100))
-    lines(cxy$x, cxy$y, type = "l", col = gray(1), lwd = lwd.grad)
+    lines(cxy$x, cxy$y, type = "l", col = gray(1), lwd = factor.lwd * lwd.grad)
   }
   
   par(xpd = TRUE)
@@ -311,13 +331,17 @@ plotRegionDC <- function(codereg, gradMax = 60){
            y0 = head(pxy$y, -1),
            x1 = tail(pxy$x, -1),
            y1 = tail(pxy$y, -1), asp = 1, 
-       pch = 16, col = agg$col, lwd = 1.5)
+       pch = 16, col = agg$col, lwd = factor.lwd * 1.5)
   
-  title(main = reg, cex.main = 1.5, font = 1)
+  title(main = locName, cex.main = cex.main, font.main = 1)
 } # end plot function
 
 layout(1)
-plotRegionDC(11)
+plotDC(11)
+plotDC("94", localLevel = "departement", gradMax = 70)
+
+plotDC("24", localLevel = "departement", gradMax = 70, factor.lwd = 0.5)
+
 
 # Order of the regions (by code)
 # in the layout
@@ -331,10 +355,11 @@ regDROM <- c(1:4, 6)
 ```
 
 ```{r}
-addTitlePlot <- function(){
+addTitlePlot <- function(cexx = 2){
+  # Color trick from https://blog.revolutionanalytics.com/2009/01/multicolor-text-in-r.html
   par(mar = rep(0.1, 4), pty = "m")
   plot(0, axes = FALSE, xlab = "", ylab = "", type = "n", xlim = c(-1, 1), ylim = c(-1, 1))
-  cexx <- 2
+
   txt <- "Taux de mortalité en "
   text(0, 0, adj = c(0.5, 0.5), cex = cexx, labels = expression("Taux de mortalité en " * phantom("2018") * ", " * phantom("2019") * ", " * phantom("2020") * ", " * phantom("2021") * ", et " * phantom("2022") * " (partiel)"))
   text(0, 0, adj = c(0.5, 0.5), cex = cexx, labels = expression(phantom("Taux de mortalité en ") * phantom("2018") * phantom(", ") * phantom("2019") * phantom(", ") * phantom("2020") * phantom(", ") * phantom("2021") * phantom(", et ") * phantom("2022") * phantom(" (partiel)")))
@@ -363,7 +388,7 @@ layout(matrix(c(rep(16, 3), 2, 3, 2, 4:15, rep(17, 3))-2, byrow = TRUE, ncol = 3
 for(codereg in regions){
   par(pty = "s", xpd = FALSE) # Square aspect ratios
   par(mar = c(0, 0, 1.5, 0) + 1)
-  plotRegionDC(codereg)
+  plotDC(codereg)
 #  plot(0, axes = FALSE, xlab = "", ylab = "")
 #  title(dicReg[as.character(codereg)], cex.main = 1.5, font.main = 1)
 }
@@ -396,7 +421,7 @@ layout.show(7)
 for(codereg in regDROM){
   par(pty = "s", xpd = FALSE) # Square aspect ratios
   par(mar = c(0, 0, 1.5, 0) + 1)
-  plotRegionDC(codereg, gradMax = ech[codereg])
+  plotDC(codereg, gradMax = ech[codereg])
 #  plot(0, axes = FALSE, xlab = "", ylab = "")
 #  title(dicReg[as.character(codereg)], cex.main = 1.5, font.main = 1)
 }
@@ -412,3 +437,50 @@ dev.off()
 system(paste0("open ", fname))
 
 ```
+
+## By departement
+
+```{r mapDepDC}
+geo.departements <- read.csv("data/departements-france.csv")
+source("../data/layout_departements.R")
+
+fname <- "pics/DCdepartements.png"
+fac.dep <- 1
+png(filename = fname, width = fac.dep * sum(widths.deps), height = fac.dep * sum(heights.deps), res = 300, units = "in")
+
+emptyplot <- function(){
+  plot(0, 0, type = "n", axes = FALSE, xlab = "", ylab = "")
+}
+
+# par(bg = gray(0.3), fg = "white")
+
+# Plot layout, placing each departement approximately where it is on the French map
+layout(deps.indices, heights = heights.deps, widths = widths.deps)
+
+i <- 1
+for(i in geo.departements$index){
+  dep <- geo.departements[i, "code_departement"]
+  print(i)
+  plotDC(codeLoc = dep, localLevel = "departement", gradMax = 90, mar = c(0.1, 0.1, 0.5, 0.1), cex.main = 0.9, factor.lwd = 0.4, cex.month = 0.4)
+  #par(mar = rep(0.1, 4)); emptyplot()
+}
+
+
+# Legend
+emptyplot()
+
+# Title
+addTitlePlot(cexx = 3)
+
+
+# Credits
+par(mar = rep(0.2, 4), pty = "m")
+plot(0, axes = FALSE, xlab = "", ylab = "", type = "n", xlim = c(-1, 1), ylim = c(-1, 1))
+text(-1, 1, adj = c(0, 1), labels = "Les graduations vont de 10 en 10, en décès quotidiens par 1 million d'habitants (lissage 7 jours)
+Données: INSEE mars 2022, https://www.insee.fr/fr/statistiques/4487988?sommaire=4487854\nCode: https://github.com/flodebarre/covid_indicateurs/blob/main/mortaliteINSEE.Rmd", family = "mono", cex = 1.5, col = gray(0.5))
+
+dev.off()
+system(paste0("open ", fname))
+
+```
+
