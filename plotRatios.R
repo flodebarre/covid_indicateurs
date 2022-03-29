@@ -178,8 +178,9 @@ colRes <- gray(0.5)
 # Curve for 7-d average of the ratios
 par(xpd = FALSE)
 opC <- 0.7
-dat2 <- dat[dat$date >= minDate & dat$date <= maxDate, ]
-if(all(is.na(tail(dat2$ratio7_dateTest, 2)))){
+dat2 <- dat[dat$date >= minDate & dat$date <= maxDate, ] # Subset of the data between the min and max dates
+# (we have not subsetted like this before to avoid artificially introducing NAs when computing the ratios)
+if(all(is.na(tail(dat2$ratio7_dateTest, 2)))){ # Make sure we will not include the two last lines if they are NAs
   n2 <- nrow(dat2) - 2
 }
 
