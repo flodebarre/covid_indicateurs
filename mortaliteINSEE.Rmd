@@ -11,11 +11,10 @@ Source: <https://www.insee.fr/fr/statistiques/4487988?sommaire=4487854>
 
 ## With data by death location 
 
-(This is not used in the end, but kept for legacy)
+(This is not used in the end, but kept for legacy; you can skip this section. I am keeping it because it was useful to decipher some names in the other file)
 
-```{r}
+```{r, fig.show='hide'}
 dat1 <- read.csv("data/INSEE_2022-03-25_deces_sexe_age_lieu_csv/2022-03-24_deces_parlieu_jour_France.csv", sep = ";", fileEncoding = "latin1")
-
 
 # Clean dates
 dts <- as.data.frame(matrix(unlist(strsplit(dat1$Date_evenement, split = c("-"))), byrow = TRUE, ncol = 2))
@@ -55,7 +54,6 @@ for(yr in c(2019, 2021, 2022)){
   points(as.Date(paste0(yr, "-", dat1$month, "-", dat1$day)), dat1$dailyDeaths_Maison_retraite_Deces2019, ylim = c(0, yM))
   points(as.Date(paste0(yr, "-", dat1$month, "-", dat1$day)), dat1$dailyDeaths_Domicile_Deces2019, ylim = c(0, yM))
   points(as.Date(paste0(yr, "-", dat1$month, "-", dat1$day)), dat1$dailyDeaths_Autre_Deces2019, ylim = c(0, yM))  
-
 
 head(dat1)
 names(dat1)
@@ -176,8 +174,6 @@ mnth <- seq(as.Date("2018-01-01"), max(dat$dateDC), by = "month")
 ```
 
 ```{r}
-
-
 reg <- "Île-de-France"
 fname <- paste0("pics/INSEE-DC_", reg, ".png")
 png(fname, width = 16, height = 9, units = "in", res = 300)
@@ -255,6 +251,11 @@ plotDC <- function(codeLoc, gradMax = 60, localLevel = "region", mar = c(1, 1, 2
     locName <- dicDep[codeLoc]
     subdat <- dat[dat$nomDep == locName, ]
   }
+  if(localLevel == "other"){
+    locName <- ""
+    nch <- nchar(codeLoc)
+    subdat <- dat[which(substr(dat$COMDOM, 1, nch) == codeLoc), ]
+  }
   
   # Aggregate by day
   agg <- aggregate(subdat$LIEUDEC2, by = list(dateDC = subdat$dateDC), FUN = length)
@@ -283,12 +284,15 @@ plotDC <- function(codeLoc, gradMax = 60, localLevel = "region", mar = c(1, 1, 2
   if(localLevel == "departement"){
     pops <- popDep[which(popDep$CodeDep == codeLoc), ]
   }
+  if(localLevel == "other"){
+    pops <- data.frame(pop2022 = 1, pop2019 = 1)
+  }
   pop <- rep(pops$pop2022, nrow(agg)) # Use the 2022 population estimation for 2021 and 2022
   pop[agg$yearDC < 2021] <- pops$pop2019 # Use the 2019 population estimation for 2018, 2019, 2020
   
   # Get point color from year
   agg$col <- colYear[agg$yearDC]
-  factor <- 10^6
+  factor <- ifelse(unique(pop == 1), 1, 10^6)
   pxy <- polar2xy(agg$nDC7ave / pop * factor, agg$fracYear)
   
   # Initialize plot
@@ -316,7 +320,7 @@ plotDC <- function(codeLoc, gradMax = 60, localLevel = "region", mar = c(1, 1, 2
   r <- gradMax - 5
   thetas <- (1:12)/12 - 0.5/12 # Angles of the months
   for(i in seq_along(monthLab)){
-    text(x = r * cos(frac2angle(thetas[i])), y = r * sin(frac2angle(thetas[i])), labels = monthLab[i], srt = 90 + 90 - thetas[i]*360 + orientation[i] * 180, col = gray(1), cex = cex.month, family = "sans")
+    text(x = r * cos(frac2angle(thetas[i])), y = r * sin(frac2angle(thetas[i])), labels = monthLab[i], srt = 90 + 90 - thetas[i]*360 + orientation[i] * 180, col = gray(0.5), cex = cex.month, family = "sans")
   }
   
   # Graduations
@@ -341,6 +345,8 @@ plotDC(11)
 plotDC("94", localLevel = "departement", gradMax = 70)
 
 plotDC("24", localLevel = "departement", gradMax = 70, factor.lwd = 0.5)
+
+plotDC("987", localLevel = "other", gradMax = 70, factor.lwd = 0.5)
 
 
 # Order of the regions (by code)
@@ -375,11 +381,11 @@ addTitlePlot <- function(cexx = 2){
 ### Mainland 
 
 ```{r DCRegMainland}
-fname <- "pics/INSEE_DC_regions.png"
+fname.RegFra <- "pics/INSEE_DC_regions.png"
 fac <- 2.5 # Multiplying factor for the png output
 hh <- 0.2 # Height of the title and credits lines
 
-png(fname, width = fac*3, height = fac*(5+2*hh), units = "in", res = 300)
+png(fname.RegFra, width = fac*3, height = fac*(5+2*hh), units = "in", res = 300)
 
 layout(matrix(c(rep(16, 3), 2, 3, 2, 4:15, rep(17, 3))-2, byrow = TRUE, ncol = 3), heights = c(hh, rep(1, 5), 0.2)) # plot layout as grid
 # layout.show(15)
@@ -401,18 +407,18 @@ text(-1, 1, adj = c(0, 1), labels = "Les graduations vont de 10 en 10, en décè
 Données: INSEE mars 2022, https://www.insee.fr/fr/statistiques/4487988?sommaire=4487854\nCode: https://github.com/flodebarre/covid_indicateurs/blob/main/mortaliteINSEE.Rmd", family = "mono", cex = 1, col = gray(0.5))
 
 dev.off()
-system(paste0("open ", fname))
+system(paste0("open ", fname.RegFra))
 
 ```
 
 ### DROM
 
 ```{r DCRegDROM}
-fname <- "pics/INSEE_DC_DROM.png"
+fname.DROM <- "pics/INSEE_DC_DROM.png"
 
 ech <- c(120, 120, 60, 60, NA, 60) # Scale for max graduation
 
-png(fname, width = fac*3, height = fac*(3+2*hh), units = "in", res = 300)
+png(fname.DROM, width = fac*3, height = fac*(3+2*hh), units = "in", res = 300)
 
 layout(matrix(c(6, 0, 0, 0, 7, 6, 1, 2, 3, 7, 6, 0, 4, 5, 7, 6, 0, 0, 0, 7), byrow = FALSE, ncol = 4), heights = c(hh, rep(1, 3), 0.2), widths = c(0.5, 1, 1, 0.5)) # plot layout as grid
 layout.show(7)
@@ -434,7 +440,7 @@ text(-1, 1, adj = c(0, 1), labels = "Les graduations vont de 10 en 10, en décè
 Données: INSEE mars 2022, https://www.insee.fr/fr/statistiques/4487988?sommaire=4487854\nCode: https://github.com/flodebarre/covid_indicateurs/blob/main/mortaliteINSEE.Rmd", family = "mono", cex = 1, col = gray(0.5))
 
 dev.off()
-system(paste0("open ", fname))
+system(paste0("open ", fname.DROM))
 
 ```
 
@@ -444,9 +450,9 @@ system(paste0("open ", fname))
 geo.departements <- read.csv("data/departements-france.csv")
 source("../data/layout_departements.R")
 
-fname <- "pics/DCdepartements.png"
+fname.DepFra <- "pics/INSEE_DCdepartements.png"
 fac.dep <- 1
-png(filename = fname, width = fac.dep * sum(widths.deps), height = fac.dep * sum(heights.deps), res = 300, units = "in")
+png(filename = fname.DepFra, width = fac.dep * sum(widths.deps), height = fac.dep * sum(heights.deps), res = 300, units = "in")
 
 emptyplot <- function(){
   plot(0, 0, type = "n", axes = FALSE, xlab = "", ylab = "")
@@ -480,7 +486,76 @@ text(-1, 1, adj = c(0, 1), labels = "Les graduations vont de 10 en 10, en décè
 Données: INSEE mars 2022, https://www.insee.fr/fr/statistiques/4487988?sommaire=4487854\nCode: https://github.com/flodebarre/covid_indicateurs/blob/main/mortaliteINSEE.Rmd", family = "mono", cex = 1.5, col = gray(0.5))
 
 dev.off()
-system(paste0("open ", fname))
+system(paste0("open ", fname.DepFra))
 
+```
+
+## Single departements
+
+```{r}
+# Choice of departement with constrasted dynamics
+# (alternative: use geo.departements$nom_departement to do them all)
+
+for(depName in c("Ille-et-Vilaine", "Haut-Rhin", "Guadeloupe", "Savoie")){
+  
+  hl <- 0.15 # Height of the other sections of the figure
+  
+  # Get departement code
+  dep <- geo.departements[geo.departements$nom_departement == depName, "code_departement"]
+  
+  fname <- paste0("pics/INSEE_DC_", dep, "_departements.png")
+  
+  fac.dep <- 5 # factor for the size of the picture
+  png(filename = fname, width = fac.dep * 1.2, height = fac.dep * (2*hl + 1), res = 300, units = "in")
+  
+  layout(matrix(c(2, 1, 3), ncol = 1), heights = c(hl, 1, hl))
+  
+  # Main plot
+  plotDC(codeLoc = dep, localLevel = "departement", gradMax = 90, mar = c(1, 1, 2.5, 1), cex.main = 1.75, factor.lwd = 1, cex.month = 0.8)
+  
+  # Title
+  addTitlePlot(cexx = 1.75)
+  
+  # Credits
+  par(mar = rep(0.2, 4), pty = "m")
+  plot(0, axes = FALSE, xlab = "", ylab = "", type = "n", xlim = c(-1, 1), ylim = c(-1, 1))
+  text(-1, 1, adj = c(0, 1), labels = "Les graduations vont de 10 en 10, en décès quotidiens par 1 million d'habitants (lissage 7 jours)
+Données: INSEE mars 2022, https://www.insee.fr/fr/statistiques/4487988?sommaire=4487854\nCode: https://github.com/flodebarre/covid_indicateurs/blob/main/mortaliteINSEE.Rmd", family = "mono", cex = 0.8, col = gray(0.5))
+  
+  dev.off()
+  system(paste0("open ", fname))
+}
+
+```
+
+
+
+```{r}
+# Save outputs
+system(paste0("git add -f ", fname.RegFra))
+system(paste0("git add -f ", fname.DROM))
+system(paste0("git add -f ", fname.DepFra))
+
+system("git commit -m 'load figures INSEE DC'")
+system("git push")
+```
+
+## Special requests
+
+```{r}
+# Are there data from COMs?
+# Code geo COM: https://www.insee.fr/fr/information/2028040
+
+# Where people live
+any(substr(dat$COMDOM, 1, 3) == "987")
+dat[which(substr(dat$COMDOM, 1, 2) == "98"), ]
+
+# Where people died
+any(substr(dat$COMDEC, 1, 3) == "987")
+any(substr(dat$COMDEC, 1, 2) == "98")
+
+sum(substr(dat$COMDEC, 1, 4) == "9750")
+
+# -> no data on deaths that took place in COM 
 ```
 
