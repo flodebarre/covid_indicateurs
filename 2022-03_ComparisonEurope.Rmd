@@ -49,7 +49,7 @@ names(dicoCtr) <- dico[, 1]
 ```{r}
 # Define colors
 ctrs <- sort(c("BEL", "DNK", "FRA", "DEU", "FIN", "PRT", "CHE", "GBR", "NLD", "IRL", "ESP", "SWE", "NOR"))
-ctrs <- sort(c("PRT", "BEL", "FRA"))
+ctrs <- sort(c("PRT", "BEL", "FRA", "ESP"))
 cols <- met.brewer("Signac", n = length(ctrs), type = "discrete")
 names(cols) <- ctrs
 
@@ -93,6 +93,9 @@ legend("topleft", col = cols, legend = names(cols), pch = 16, box.lwd = 0)
 # With ECDC data
 
 ## Data
+
+ECDC data are updated every Thursday
+
 ```{r}
 URL.ECDC <- "https://opendata.ecdc.europa.eu/covid19/nationalcasedeath_eueea_daily_ei/csv/data.csv"
 # Source: https://www.ecdc.europa.eu/en/publications-data/data-daily-new-cases-covid-19-eueea-country
@@ -101,6 +104,8 @@ fname <- "data/cases_ECDC.csv"
 
 if(dlData){
   download.file(URL.ECDC, fname)
+  system(paste0("git add ", fname))
+  system(paste0("git commit -m 'update ECDC data'"))
 }
 
 datECDC <- read.csv(fname)
@@ -108,9 +113,9 @@ datECDC <- read.csv(fname)
 head(datECDC)
 
 datECDC$date <- as.Date(datECDC$dateRep, format = "%d/%m/%Y")
-
 sort(unique(datECDC$countriesAndTerritories))
 
+max(datECDC$date)
 
 # Sort by date
 datECDC <- datECDC[order(datECDC$countriesAndTerritories, datECDC$date), ]
@@ -120,7 +125,12 @@ datECDC <- datECDC[order(datECDC$countriesAndTerritories, datECDC$date), ]
 ## Plot function
 
 ```{r}
-plotPhase <- function(times, cases, col, incidRatio = FALSE){
+plotPhase <- function(times, cases, col, incidRatio = FALSE, plot = TRUE){
+  # times: Vector of times
+  # cases: vector of case numbers
+  # col: color of the line
+  # incidRatio: whether to plot ratio of 7-day incidence or case ratios
+  # plot: whether to plot (otherwise just returns result)
   
   # Compute 7-day sums
   incid7 <- 7 * sliding.window(cases, pos = 7, FUN = mean, na.rm = TRUE)
@@ -131,10 +141,12 @@ plotPhase <- function(times, cases, col, incidRatio = FALSE){
   cases.ratios7[8:nend] <- cases[8:nend] / cases[1:(nend - 7)]
   incid.ratios7[8:nend] <- incid7[8:nend] / incid7[1:(nend - 7)]
   
-  if(incidRatio){
-    points(incid7, incid.ratios7, type = "l", lwd = 2, col = col)
-  }else{
-    points(incid7, sliding.window(cases.ratios7, pos = 7), type = "l", lwd = 2, col = col)
+  if(plot){
+    if(incidRatio){
+      points(incid7, incid.ratios7, type = "l", lwd = 2, col = col)
+    }else{
+      points(incid7, sliding.window(cases.ratios7, pos = 7), type = "l", lwd = 2, col = col)
+    }
   }
   
   list(incid7 = incid7, 
@@ -176,7 +188,7 @@ ncl <- 5 # Number of columns in the plot
 layout(matrix(c(1:length(ctrs), rep(1 + length(ctrs), ncl)), ncol = ncl, byrow = TRUE), heights = c(rep(1, 6), 0.3 ))
 
 minDate <- "2021-12-15"
-maxDate <- Sys.Date() - 5
+maxDate <- max(datECDC$date) - 3
 
 for(ctr in ctrs){
   subCountry <- datECDC[which(datECDC$countriesAndTerritories == ctr), ]
@@ -184,7 +196,7 @@ for(ctr in ctrs){
   
   # Initialize plot
   par(mar = c(2, 2, 1, 0.5), mgp = c(2, 0.1, 0), tck = -0.02, las = 1)
-  plot(1, type = "n", log = "xy", xlim = c(100, 5500), ylim = c(0.22, 4.5), 
+  plot(1, type = "n", log = "xy", xlim = c(75, 6000), ylim = c(0.22, 4.5), 
        xlab = "", ylab = "", main = ctr, axes = FALSE, frame.plot = TRUE)
   abline(h = 1)
   axis(1, cex.axis = 0.65)
@@ -251,6 +263,8 @@ system(paste0("open ", fname))
 
 ## Specific countries
 
+### With France
+
 ```{r}
 layout(1)
 # Initialize plot window 
@@ -296,9 +310,143 @@ legend("topleft", col = cols, legend = names(cols), pch = 16, box.lwd = 0)
 
 ```
 
+
+### Germany and Austria
+
+```{r}
+
+# Define colors
+ctrs <- c("Germany", "Austria")
+cols <- c("#FFCC00", "#EF3340") 
+# From https://www.flagcolorcodes.com/germany 
+# https://www.flagcolorcodes.com/austria
+names(cols) <- ctrs
+
+
+minDt <- "2021-06-01"
+maxDt <- max(datECDC$date) - 4
+
+plotGA <- function(maxDate, minDate = minDt){
+  
+  tmp <- datECDC[datECDC$date >= minDate & datECDC$date <= maxDate, ]
+  
+  layout(1)
+  # Initialize plot window 
+  par(las = 1)
+  par(mar = c(6, 5, 3, 2), mgp = c(2., 0.5, 0), tck = -0.01)
+  plot(1, type = "n",
+       xlim = c(5, 4000),
+       ylim = c(0.3, 3),
+       log = "xy",
+       xlab = "7-day incidence per 100'000 inhabitants",
+       ylab = "Week-to-week ratio of 7- incidence (log scale)")
+  abline(h = 1)
+  
+  for(ctr in ctrs){
+    subCountry <- tmp[which(tmp$countriesAndTerritories == ctr), ]
+    times <- subCountry$date
+    cases <- subCountry$cases / subCountry$popData2020 * 10^5
+    
+    # If missing dates, add them
+    if(!all(diff(times) == 1)){
+      sC <- merge(data.frame(date = seq(min(as.Date(times)), max(as.Date(times)), by = "day")), subCountry, by = "date", all.x = TRUE)
+      times <- sC$date
+      cases <- sC$cases / sC$popData2020 * 10^5
+    }
+    
+    pP <- plotPhase(times, 
+                    cases, 
+                    adjustcolor(cols[ctr], 0.7), incidRatio = TRUE)
+  }
+  
+  # Re-do for final point
+  # (done separately other wise superimposition problems)
+  for(ctr in ctrs){
+    subCountry <- tmp[which(tmp$countriesAndTerritories == ctr), ]
+    times <- subCountry$date
+    cases <- subCountry$cases / subCountry$popData2020 * 10^5
+    
+    # If missing dates, add them
+    if(!all(diff(times) == 1)){
+      sC <- merge(data.frame(date = seq(min(as.Date(times)), max(as.Date(times)), by = "day")), subCountry, by = "date", all.x = TRUE)
+      times <- sC$date
+      cases <- sC$cases / sC$popData2020 * 10^5
+    }
+    
+    # (do not plot this time)
+    pP <- plotPhase(times, 
+                    cases, 
+                    adjustcolor(cols[ctr], 0.7), incidRatio = TRUE, plot = FALSE)
+    
+    n <- length(pP$incid.ratios7)
+    # Final point
+    points(pP$incid7[n], pP$incid.ratios7[n], cex = 3, pch = 16, col = cols[ctr])
+    text(pP$incid7[n], pP$incid.ratios7[n], col = "white", labels = substr(ctr, 1, 1))
+  }
+  
+  legend("topleft", col = cols, legend = names(cols), pch = 16, box.lwd = 0, bty = "n")
+  
+  mtext(side = 3, text = paste0("Covid-19 cases phase portraits", ", ", minDate, " -- ", maxDate), line = 1, cex = 1.2, font = 2)
+  
+  mtext(side = 1, adj = 0, 
+        text = paste0("@flodebarre, ", Sys.Date(), ", inspired by @VictimOfMaths, @trvrb, @BristOliver\n", 
+                      "Data:  https://www.ecdc.europa.eu/en/publications-data/data-daily-new-cases-covid-19-eueea-country\n", 
+                      "Code: https://github.com/flodebarre/covid_indicateurs/blob/main/2022-03_ComparisonEurope.Rmd"), cex = 0.7, col = gray(0.5), family = "mono", line = 4.5)
+  
+}
+
+plotGA(maxDt, minDate = "2020-08-01")
+
+plotGA("2022-01-01")
+
+
+```
+
+```{r}
+days <- seq(as.Date(minDt), as.Date(maxDt), by = "days")
+length(days)
+
+prefix <- "pics/phasePlotGA_"
+
+system(paste0("rm ", prefix, "*"))
+
+for (iday in 15:length(days)){
+  cat(iday, "")
+  fname <- paste0(prefix, formatC(iday, width = 3, flag = 0), ".png")
+  png(fname, width = 8*1.2, height = 4.5*1.2, res = 100, units = "in")
+  plotGA(days[iday])
+  dev.off()
+#  system(paste0("open ", fname))
+}
+
+
+# Copy last pic
+for(j in 1:20){
+  system(paste0("cp ", prefix, formatC(iday, width=3, flag="0"), ".png", " ", prefix, formatC(iday, width=3, flag="0"), "_", j, ".png"))
+}
+
+# Copy first one
+for(j in 1:3){
+  system(paste0("cp ", prefix, iday, ".png", " ", prefix, "000_", j, ".png"))
+}
+
+
+# Convert into movie
+system("rm pics/phasePlotGA.mp4")
+system(paste0("ffmpeg -pattern_type glob -i 'pics/phasePlotGA_", "*", ".png' -vcodec libx264 -s 800x450 -pix_fmt yuv420p -filter:v 'setpts=1.5*PTS' pics/phasePlotGA.mp4"))
+system("open pics/phasePlotGA.mp4")
+
+
+system("rm pics/phasePlotGA_audio.mp4")
+# Source: https://commons.wikimedia.org/wiki/File:Johann_Strauss_-_Wiener_Blut_Op._354.ogg
+system("ffmpeg -i pics/phasePlotGA.mp4 -i data/Johann_Strauss_-_Wiener_Blut_Op._354.ogg -map 0 -map 1:a -c:v copy -shortest pics/phasePlotGA_audio.mp4")
+
+```
+
 # With country-specific data
 
 ## Data Portugal
+
 ```{r loadDataPRT, results='hide'}
 URL.PRT <- "https://raw.githubusercontent.com/dssg-pt/covid19pt-data/master/data.csv"
 
@@ -321,6 +469,7 @@ datPRT$date <- as.Date(datPRT$date, format = "%d-%m-%Y")
 ```
 
 ## Data Belgium
+
 ```{r loadDataBEL, results='hide'}
 URL.BEL <- "https://epistat.sciensano.be/Data/COVID19BE_CASES_AGESEX.csv"
 
@@ -339,7 +488,7 @@ pop <- unique(datECDC[datECDC$countriesAndTerritories == "Belgium", "popData2020
 times <- datBEL$date[datBEL$date >= minDate]
 cases <- datBEL$cases[datBEL$date >= minDate] / pop * 10^5
 
-plotPhase(times, cases, col = "red")
+#plotPhase(times, cases, col = "red")
 ```
 
 ## Data France
@@ -364,12 +513,13 @@ ii <- which(datFRA$date >= minDate)
 times <- datFRA$date[ii]
 cases <- datFRA$cases[ii] / datFRA$pop[ii] * 10^5
 
-plotPhase(times, cases, col = "green")
+#plotPhase(times, cases, col = "green")
 
 
 ```
 
 ## Data Italy
+
 ```{r}
 URL.ITA <- "https://raw.githubusercontent.com/pcm-dpc/COVID-19/master/dati-andamento-nazionale/dpc-covid19-ita-andamento-nazionale.csv"
 # Source: https://github.com/pcm-dpc/COVID-19/tree/master/dati-andamento-nazionale
@@ -389,6 +539,7 @@ datITA$cases <- datITA$nuovi_positivi
 ```
 
 ## Data Spain
+
 ```{r}
 URL.Spain <- "https://cnecovid.isciii.es/covid19/resources/casos_tecnica_provincia.csv"
 
@@ -435,7 +586,10 @@ days <- data.frame(date = seq(min(datCountries$date), max(datCountries$date), by
 
 datCountries <- merge(days, datCountries, by = "date", all.x = TRUE)
 
-
+# Count the number of data points at each date
+ndates <- aggregate(datCountries$date, by = list(date = datCountries$date), FUN = length)
+# Select the last date with the max number of data points
+iFinal <- max(which(ndates$x == max(ndates$x)))
 
 ```
 
@@ -444,9 +598,9 @@ datCountries <- merge(days, datCountries, by = "date", all.x = TRUE)
 
 ```{r}
 minDate <- "2021-12-15"
-maxDate <- "2022-03-09"
+maxDate <- ndates[iFinal, "date"]
 
-days <- seq(as.Date(minDate), as.Date(maxDate), by = "days")
+days <- seq(as.Date(minDate), as.Date(maxDate), by = "day")
 
 
 ctrs <- c("France", "Italy", "Belgium", "Portugal", "Spain")
@@ -519,8 +673,11 @@ plotFIPS <- function(iDate, openPlot = FALSE){
   if(openPlot) system(paste0("open ", fname))  
 }
 
-plotFIPS(7, openPlot = TRUE)
+plotFIPS(iFinal, openPlot = TRUE)
+```
 
+
+```{r runAnimationCountries}
 system("rm pics/phaseCountries_*png")
 for(k in seq_along(days)[-(1:6)]){
   plotFIPS(k)
