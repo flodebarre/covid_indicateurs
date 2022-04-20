@@ -25,7 +25,7 @@ dlData <- TRUE
 # Color packages
 library("RColorBrewer")
 library("colorspace")
-
+library("MetBrewer")
 # Colors for days
 colJ <- brewer.pal(n = 7, name = "Set2")
 names(colJ) <- 1:7
@@ -59,8 +59,6 @@ if(dlData){
 }
 
 dat.France <- read.csv(dataFile, sep = ";", stringsAsFactors = FALSE)
-
-
 ```
 
 Add info on dates
@@ -106,6 +104,10 @@ computeRatios <- function(dat){
   
   subdat$ratios7 <- NA # Initialize column
   
+  # 7-d averages
+  subdat$P7j <- sliding.window(subdat$P)
+  subdat$T7j <- sliding.window(subdat$T)
+  
   # Ratios
   subdat[8:nend, "ratios7"] <- subdat[8:nend, "P"] / subdat[1:(nend - 7), "P"]
   # Logs (not needed because we will plot on a log scale)
@@ -119,7 +121,12 @@ computeRatios <- function(dat){
   # Sliding average
   subdat$Tratios7.slidingave <- sliding.window(subdat$Tratios7)
   
-  subdat # Return result
+  # ratios of 7-day prevalence
+  subdat[8:nend, "P7ratios7"] <- subdat[8:nend, "P7j"] / subdat[1:(nend - 7), "P7j"]
+  subdat[8:nend, "T7ratios7"] <- subdat[8:nend, "T7j"] / subdat[1:(nend - 7), "T7j"]
+
+  
+  return(subdat) # Return result
 }
 
 ```
@@ -129,16 +136,17 @@ computeRatios <- function(dat){
 # where growth rate is ln(Nt - N0) / t
 t2 <- log(2)/2
 t4 <- log(2)/4
+t3 <- log(2)/3
 t1 <- log(2)/1
 t05 <- log(2)/(5/7)
 t10 <- log(2)/(10/7)
 
 agecl <- 0
-dateMin <- "2021-06-15" # min(dat.France$jour)
+dateMin <- "2021-11-01" # min(dat.France$jour)
 dateMax <- max(dat.France$jour)
 
 
-plotRatio <- function(agecl, dateMin, dateMax, miMonth = TRUE, year = FALSE){
+plotRatio <- function(agecl, dateMin, dateMax, miMonth = TRUE, year = FALSE, lang = "FR"){
   # Subset of the data for this age class and date range
   subdat <- dat.France[which(dat.France$jour >= dateMin & dat.France$jour <= dateMax & dat.France$cl_age90 == agecl), ]
   
@@ -155,8 +163,10 @@ plotRatio <- function(agecl, dateMin, dateMax, miMonth = TRUE, year = FALSE){
   
 #  plot(as.Date(subdat$jour), subdat$logratios7, col = colJ[as.character(subdat$weekday)], pch = 16, ylim = 1.1*c(-xr, xr))
   
-  colCroiss <- "#FF0000"
-  colDecroiss <- "#00A5A5"
+  # Colors chosen using Paletton 
+  # https://paletton.com/#uid=30a0u0kprrvfFAukHtUsrmuw4hF
+  colCroiss <- "#DB512D"
+  colDecroiss <- "#22698B"
   
   xrr <- max(abs(subdat$ratios7), na.rm = TRUE) # Not used
   
@@ -166,8 +176,11 @@ plotRatio <- function(agecl, dateMin, dateMax, miMonth = TRUE, year = FALSE){
   ylm <- c(0.5, 1.1*exp(xr)) # ylim
 
   # Initialize figure
+  txt <- ifelse(lang == "FR", 
+                "cas(j)/cas(j-7), échelle log", 
+                "cases(j)/cases(j-7), log scale")
   plot(as.Date(subdat$jour), subdat$ratios7, ylim = ylm, log = "y", axes = FALSE, 
-       xlab = "", ylab = "cas(j)/cas(j-7), échelle log", 
+       xlab = "", ylab = txt, 
        type = "n")
   
   limPlot <- par("usr") # limits of the plot in user coordinates
@@ -199,31 +212,41 @@ plotRatio <- function(agecl, dateMin, dateMax, miMonth = TRUE, year = FALSE){
   
   # Add mention direction in shaded areas
   cexlabshade <- 1.2
-  text(as.Date((limPlot[1]+limPlot[2])/2, origin = "1970-01-01"), ylm[1], adj = c(0.5, -1), labels = "   Le nombre de cas décroît", col = colDecroiss, font = 1, cex = cexlabshade)
-  text(as.Date((limPlot[1]+limPlot[2])/2, origin = "1970-01-01"), ylm[2], adj = c(0.5, 2), labels = "   Le nombre de cas croît", col = colCroiss, font = 1, cex = cexlabshade)
+  txt <- ifelse(lang == "FR", 
+                "   Le nombre de cas décroît",
+                "   Cases decrease")
+  text(as.Date((limPlot[1]+limPlot[2])/2, origin = "1970-01-01"), ylm[1], adj = c(0.5, -1), labels = txt, col = colDecroiss, font = 1, cex = cexlabshade)
+  txt <- ifelse(lang == "FR", 
+                "   Le nombre de cas croît",
+                "   Cases increase")
+  text(as.Date((limPlot[1]+limPlot[2])/2, origin = "1970-01-01"), ylm[2], adj = c(0.5, 2), labels = txt, col = colCroiss, font = 1, cex = cexlabshade)
   
   # Add axes
   tckk <- -0.02
-  cexx <- 0.9
+  cexx <- 0.8
   days <- seq(as.Date(dateMin), as.Date(dateMax)+30, by = "day")
   
   if(year){
-    dateFormat <- "%d/%m/%y"  
+    dateFormat <- "%b %Y"
+    adj <- 0
   }else{
     dateFormat <- "%d/%m"
+    adj <- 0.5
   }
 
   
   axis(1, at = as.Date(range(days)), labels = rep("", 2), tck = 0, pos = ylm[1])
   
-  axis(1, at = seq(as.Date(dateMin), as.Date(dateMax)+14, by = "month"), labels = format(seq(as.Date(dateMin), as.Date(dateMax)+14, by = "month"), format = dateFormat), las = 1, cex.axis = cexx, tck = tckk, lwd = 0, lwd.ticks = 1, pos = ylm[1])
+  axis(1, at = seq(as.Date(dateMin), as.Date(dateMax)+14, by = "month"), labels = format(seq(as.Date(dateMin), as.Date(dateMax)+14, by = "month"), format = dateFormat), las = 1, cex.axis = cexx, tck = tckk, lwd = 0, lwd.ticks = 1, pos = ylm[1], adj = adj)
   
   if(miMonth){
-      axis(1, at = seq(as.Date(dateMin)+16, as.Date(dateMax)+14, by = "month"), labels = format(seq(as.Date(dateMin)+16, as.Date(dateMax)+14, by = "month"), format = dateFormat), las = 1, cex.axis = cexx, tck = tckk, lwd = 0, lwd.ticks = 1, pos = ylm[1])
+      axis(1, at = seq(as.Date(dateMin)+14, as.Date(dateMax)+14, by = "month"), labels = format(seq(as.Date(dateMin)+14, as.Date(dateMax)+14, by = "month"), format = dateFormat), las = 1, cex.axis = cexx, tck = tckk, lwd = 0, lwd.ticks = 1, pos = ylm[1])
   }
 
-  
-  axis(1, at = days, labels = rep("", length(days)), las = 3, cex.axis = cexx, tck = tckk/2, lwd = 0, lwd.ticks = 1, pos = ylm[1])
+  if(!year){
+    # Ticks every day
+    axis(1, at = days, labels = rep("", length(days)), las = 3, cex.axis = cexx, tck = tckk/2, lwd = 0, lwd.ticks = 1, pos = ylm[1])
+  }
   
   axis(2, at = c(seq(0.5, 1, by = 0.1), seq(1.2, 3, by = 0.2)), tck = -.01, pos = as.Date(limPlot[1], origin = "1970-01-01"))
   
@@ -231,23 +254,33 @@ plotRatio <- function(agecl, dateMin, dateMax, miMonth = TRUE, year = FALSE){
   par(xpd = TRUE)
   cexleg <- 1
   dj <- 2
-  text(x = as.Date(limPlot[2], origin = "1970-01-01") + dj, y = exp(t4), labels = "x2 toutes les 4 semaines", adj = c(0, 0.5), cex = cexleg)
   
-  text(x = as.Date(limPlot[2], origin = "1970-01-01") + dj, y = exp(t2), labels = "x2 toutes les 2 semaines", adj = c(0, 0.5), cex = cexleg)
+  txt <- ifelse(lang == "FR", "x2 toutes les 4 semaines", "x2 every 4 weeks")
+  text(x = as.Date(limPlot[2], origin = "1970-01-01") + dj, y = exp(t4), labels = txt, adj = c(0, 0.5), cex = cexleg)
   
-  text(x = as.Date(limPlot[2], origin = "1970-01-01") + dj, y = exp(t1), labels = "x2 toutes les semaines", adj = c(0, 0.5), cex = cexleg)
+  txt <- ifelse(lang == "FR", "x2 toutes les 2 semaines", "x2 every 2 weeks")
+  text(x = as.Date(limPlot[2], origin = "1970-01-01") + dj, y = exp(t2), labels = txt, adj = c(0, 0.5), cex = cexleg)
   
-  text(x = as.Date(limPlot[2], origin = "1970-01-01") + dj, y = exp(t10), labels = "x2 tous les 10 jours", adj = c(0, 0.5), cex = cexleg)
+  txt <- ifelse(lang == "FR", "x2 toutes les semaines", "x2 every week")
+  text(x = as.Date(limPlot[2], origin = "1970-01-01") + dj, y = exp(t1), labels = txt, adj = c(0, 0.5), cex = cexleg)
+  
+  txt <- ifelse(lang == "FR", "x2 tous les 10 jours", "x2 every 10 days")
+  text(x = as.Date(limPlot[2], origin = "1970-01-01") + dj, y = exp(t10), labels = txt, adj = c(0, 0.5), cex = cexleg)
 
-  text(x = as.Date(limPlot[2], origin = "1970-01-01") + dj, y = exp(t05), labels = "x2 tous les 5 jours", adj = c(0, 0.5), cex = cexleg)
+  txt <- ifelse(lang == "FR", "x2 tous les 5 jours", "x2 every 5 days")
+  text(x = as.Date(limPlot[2], origin = "1970-01-01") + dj, y = exp(t05), labels = txt, adj = c(0, 0.5), cex = cexleg)
   
-  text(x = as.Date(limPlot[2], origin = "1970-01-01") + dj, y = exp(-t4), labels = "÷2 toutes les 4 semaines", adj = c(0, 0.5), cex = cexleg)
+  txt <- ifelse(lang == "FR", "÷2 toutes les 4 semaines", "÷2 every 4 weeks")
+  text(x = as.Date(limPlot[2], origin = "1970-01-01") + dj, y = exp(-t4), labels = txt, adj = c(0, 0.5), cex = cexleg)
   
-  text(x = as.Date(limPlot[2], origin = "1970-01-01") + dj, y = exp(-t2), labels = "÷2 toutes les 2 semaines", adj = c(0, 0.5), cex = cexleg)
+  txt <- ifelse(lang == "FR", "÷2 toutes les 2 semaines", "÷2 every 2 weeks")
+  text(x = as.Date(limPlot[2], origin = "1970-01-01") + dj, y = exp(-t2), labels = txt, adj = c(0, 0.5), cex = cexleg)
   
-  text(x = as.Date(limPlot[2], origin = "1970-01-01") + dj, y = exp(-t10), labels = "÷2 tous les 10 jours", adj = c(0, 0.5), cex = cexleg)
+  txt <- ifelse(lang == "FR", "÷2 toutes les 10 jours", "÷2 every 10 days")
+  text(x = as.Date(limPlot[2], origin = "1970-01-01") + dj, y = exp(-t10), labels = txt, adj = c(0, 0.5), cex = cexleg)
 
-  text(x = as.Date(limPlot[2], origin = "1970-01-01") + dj, y = exp(-t1), labels = "÷2 toutes les semaines", adj = c(0, 0.5), cex = cexleg)
+  txt <- ifelse(lang == "FR", "÷2 toutes les semaines", "÷2 every week")
+  text(x = as.Date(limPlot[2], origin = "1970-01-01") + dj, y = exp(-t1), labels = txt, adj = c(0, 0.5), cex = cexleg)
   
   par(xpd = FALSE)
   
@@ -262,18 +295,27 @@ plotRatio <- function(agecl, dateMin, dateMax, miMonth = TRUE, year = FALSE){
   # Add tests
 #  points(as.Date(subdat$jour), subdat$Tratios7, col = gray(0.8), pch = 16)
   
-  
-  mtext("Inspiré des figures de @BristOliver 
+  txt <- ifelse(lang == "FR", 
+  "Inspiré des figures de @BristOliver 
 Données: https://www.data.gouv.fr/fr/datasets/donnees-relatives-aux-resultats-des-tests-virologiques-covid-19/# (en date de prélèvement)
-Code: https://github.com/flodebarre/covid_indicateurs/blob/main/tauxCroissance.Rmd", side = 1, line = 2., adj = 0, cex = 0.5, family = "mono")
+Code: https://github.com/flodebarre/covid_indicateurs/blob/main/tauxCroissance.Rmd", 
+"@flodebarre, Inspired by @BristOliver
+Data: https://www.data.gouv.fr/fr/datasets/donnees-relatives-aux-resultats-des-tests-virologiques-covid-19/# (by sampling date)
+Code: https://github.com/flodebarre/covid_indicateurs/blob/main/tauxCroissance.Rmd")
+  mtext(txt, side = 1, line = 2., adj = 0, cex = 0.5, family = "mono")
   
-  mtext(paste0("Ratio du nombre de cas détectés en France d'une semaine à l'autre
-(en date de prélèvement), jusqu'au ", format(as.Date(dateMax), format = dateFormat)), font = 1, cex = 1.2, line = -0.75)
+  txt <- ifelse(lang == "FR", 
+                "Ratio du nombre de cas détectés en France d'une semaine à l'autre
+(en date de prélèvement), jusqu'au ", 
+"Week-to-week ratio of the number of detected cases in France
+(by sampling date), until ")
+  mtext(paste0(txt, format(as.Date(dateMax), format = "%d/%m/%Y")), font = 1, cex = 1.2, line = -0.75)
   
 }
 
-
-plotRatio(agecl, "2021-06-01", dateMax)
+startDate <- "2021-11-01"
+plotRatio(agecl, startDate, dateMax)
+plotRatio(agecl, startDate, dateMax, lang = "EN")
 ```
 
 
@@ -360,10 +402,43 @@ title("Nombre de tests effectués")
 
 # Positive cases
 
+```{r}
+# Functions for points styles
+
+getPCH <- function(wkday){
+  switch(wkday, 
+         "1" = 21, 
+         "2" = 22, 
+         "3" = 23, 
+         "4" = 21, 
+         "5" = 22, 
+         "6" = 24, 
+         "7" = 25)
+}
+getPCHs <- function(weekdays){
+  vapply(weekdays, getPCH, FUN.VALUE = 1)
+}
+
+getCex <- function(wkday){
+  cex1 <- 1.75
+  cex2 <- 0.8*cex1
+  switch(wkday, 
+         "1" = cex1, 
+         "2" = cex1, 
+         "3" = cex1, 
+         "4" = cex2, 
+         "5" = cex2, 
+         "6" = cex2, 
+         "7" = cex2)
+}
+getCexs <- function(weekdays){
+  vapply(weekdays, getCex, FUN.VALUE = 1)
+}
+```
+
 ```{r figCasPos, fig.height = 6, fig.width = 10.66}
 par(mar = c(4, 3, 3, 1))
 agecl <- 0
-dateMin <- "2021-06-01" # min(dat.France$jour)
 dateMax <- max(dat.France$jour)
 
 
@@ -410,35 +485,7 @@ plotFigP <- function(agecl, dateMin, dateMax){
     vapply(values, getCol, FUN.VALUE = "X")
   }
 
-  getPCH <- function(wkday){
-    switch(wkday, 
-           "1" = 21, 
-           "2" = 22, 
-           "3" = 23, 
-           "4" = 21, 
-           "5" = 22, 
-           "6" = 24, 
-           "7" = 25)
-  }
-  getPCHs <- function(weekdays){
-    vapply(weekdays, getPCH, FUN.VALUE = 1)
-  }
-  
-  getCex <- function(wkday){
-    cex1 <- 1.75
-    cex2 <- 0.8*cex1
-    switch(wkday, 
-           "1" = cex1, 
-           "2" = cex1, 
-           "3" = cex1, 
-           "4" = cex2, 
-           "5" = cex2, 
-           "6" = cex2, 
-           "7" = cex2)
-  }
-  getCexs <- function(weekdays){
-    vapply(weekdays, getCex, FUN.VALUE = 1)
-  }
+
 
 
 layout(matrix(c(1, 1, 2, 3), ncol = 2), widths = c(10, 3), heights = c(5, 5))
@@ -543,7 +590,7 @@ Jour de la semaine", cex = 0.8)
 
 }
 
-plotFigP(agecl, dateMin, dateMax)
+plotFigP(agecl, startDate, dateMax)
 ```
 
 
@@ -552,6 +599,160 @@ plotFigP(agecl, "2020-05-01", dateMax)
 
 ```
 
+## New fig case numbers
+
+```{r}
+# Other figure for numbers of cases
+library("MetBrewer")
+
+fname <- "pics/cases7Jratio.png"
+agecl <- 0
+dateMax <- max(dat.France$jour)
+dateMin <- "2020-06-01"
+
+  # Subset of the data for this age class and date range
+  subdat <- dat.France[which(dat.France$jour >= dateMin & dat.France$jour <= dateMax & dat.France$cl_age90 == agecl), ]
+  
+  # Remove jours feries to avoid issues
+  subdat[subdat$ferie, c("P", "T")] <- NA
+
+  # Compute ratios  
+  subdat <- computeRatios(subdat)
+
+  # Look for abs max ratio value
+  xrr <- max(abs(log(subdat[!subdat$ferie, "P7ratios7"])), na.rm = TRUE) # Not used
+  maxVal <- ceiling(xrr*10)/10
+
+  # Define color scale
+  # Obtained by merging two color scales
+  nn <- 100 # Number of values
+  x1 <- sequential_hcl(nn/2, "Inferno")
+  x2 <- sequential_hcl(nn/2, "BluYl")
+  xx <- met.brewer("Hiroshige", n = nn, direction = -1)[1:nn]#rev(c(x1, rev(x2))) ##
+  #plot(seq_along(xx), col = xx, pch = 16)
+
+  colScale <- data.frame(col = xx, logval = seq(-maxVal, maxVal, length.out = length(xx)))
+  colScale
+  colScale$val <- exp(colScale$logval)
+  colScale$logval <- seq(log)
+  #plot(colScale$val, rep(1, nrow(colScale)), col = xx, pch = 16)
+  
+  # get color corresponding to a particular value
+  getIndex <- function(value){
+    which(value < colScale$val)[1] - 1
+  }
+  getCol <- function(value){
+    i <- getIndex(value)
+    colScale[i, "col"]
+  }
+  
+  getCols <- function(values){
+    vapply(values, getCol, FUN.VALUE = "X")
+  }
+  
+png(fname, width = 10, height = 7, units = "in", res = 300)  
+
+layout(matrix(c(1, 1, 1, 0, 2, 0), ncol = 2), widths = c(8, 2), heights = c(3, 5, 3))
+
+par(bg = "white", fg = "black", col.axis = "black", col.lab = "black")
+#fgg <- gray(1)
+#par(bg = gray(0.65), 
+#    fg = gray(1), 
+#    col.axis = fgg, col.lab = fgg)
+par(las = 1)
+par(mar = c(5, 4, 4, 1))
+
+par(mgp = c(2., 0.5, 0))
+
+plot(as.Date(subdat$jour), subdat$P7j, bg = getCols(subdat$P7ratios7), col = NA, 
+       yaxs = "i", xaxs = "i",  
+       ylim = c(0, 1.1*max(subdat$P7j, na.rm = TRUE)), 
+       frame.plot = FALSE, 
+     axes = FALSE, 
+     xlab = "", 
+     ylab = "")
+  
+  limPlot <- par("usr") # limits of the plot in user coordinates
+  op <- 0.25 # Opacity parameter
+  
+  # Add Shading
+  par(xpd = TRUE)
+
+  dj <- 7
+  polygon(x = as.Date(c(limPlot[1], limPlot[2]+dj, limPlot[2]+dj, limPlot[1], limPlot[1]), origin = "1970-01-01"), y = c(0, 0, limPlot[4], limPlot[4], 0), border = NA)
+  
+  dy <- 5000
+  for(i in seq(0, max(subdat$P, na.rm = TRUE), by = dy)){
+    lines(c(limPlot[1], limPlot[2]+dj), rep(i, 2), col = gray(1, 0.5))
+  }
+
+    # Add axes
+yy <- seq(0, max(subdat$P7j, na.rm = TRUE), by = 50000)
+  axis(2, pos = limPlot[1], col = "white", lwd = 0, 
+     at = yy)
+  par(xpd = FALSE)
+for(i in yy){
+  abline(h = i, col = adjustcolor(par("fg"), 0.3), lwd = 1.2)
+}
+for(i in seq(0, max(subdat$P7j, na.rm = TRUE), by = 10000)) abline(h = i, col = adjustcolor(par("fg"), 0.2), lwd = 0.5)
+  
+
+xx <- seq(as.Date("2020-05-01"), as.Date(dateMax), by = "month")
+
+axis.Date(1, at = xx, labels = format(xx, "%b\n%Y"), lwd = 0, lwd.ticks = 1, hadj = 0.5, padj = 0.5)
+
+  # Plot points  
+  points(as.Date(subdat$jour), subdat$P7j, col = getCols(subdat$P7ratios7), type = "h", lwd = 1.25, lend = "butt")
+  lines(as.Date(subdat$jour), subdat$P7j, col = par("fg"), type = "l", lwd = 2)
+  par(xpd = FALSE)
+
+
+# Title
+mtext("Nombre de cas positifs,
+coloriés selon le ratio par rapport à la semaine précédente", side = 3, line = 0.5, adj = 0, font = 2)
+mtext(paste0("France entière, tous âges
+Nombres de cas lissés sur 7 jours, sans les jours fériés. Données jusqu'au ", format(as.Date(dateMax), "%d/%m"), "." ), side = 3, line = -1.75, cex = 0.8, adj = 0)
+
+  mtext("@flodebarre, ratio inspiré des figures de @BristOliver 
+Données: https://www.data.gouv.fr/fr/datasets/donnees-relatives-aux-resultats-des-tests-virologiques-covid-19/# (en date de prélèvement)
+Code: https://github.com/flodebarre/covid_indicateurs/blob/main/tauxCroissance.Rmd", side = 1, line = 3.75, adj = 0, cex = 0.5, family = "mono", col = gray(0.4))
+  
+#-----------------------------
+xlm <- c(-0.5, 1)
+  
+par(mar = c(2, 2, 4, 2))
+plot(rep(0, nn), seq_len(nn), col = colScale$col, pch = 15, axes = FALSE, xlab = "", ylab = "", 
+      xlim = xlm, 
+     cex = 2)
+mtext("Ratio du nb de cas 
+d'une semaine à l'autre
+(échelle log)", cex = 0.8)
+
+vals <- c(0.3, 0.5, 0.75, 1, 1.5, 2, 3)
+yy <- vapply(vals, getIndex, FUN.VALUE = 1)
+xxx <- 0.2
+text(x = rep(-xxx, length(yy)), yy, labels = vals, adj = 1)
+
+vals2 <- exp(c(-t1, -t2, 0, t2, t1, t05))
+yy2 <- vapply(vals2, getIndex, FUN.VALUE = 1)
+
+par(xpd = TRUE)
+#points(rep(xxx, length(yy2)), yy2)
+text(x = rep(xxx, length(yy2)), yy2, 
+     labels = c("/2 ttes les 2 semaines", 
+                "/2 ttes les semaines", 
+                "constant", 
+                "x2 ttes les 2 semaines", 
+                "x2 ttes les semaines", 
+                "x2 ts les 5 jours"), adj = 0, cex = 0.75)
+par(xpd = FALSE)
+
+
+dev.off()
+
+system(paste0("open ", fname))
+
+```
 
 ```{r, eval = FALSE}
 #---------
@@ -570,47 +771,75 @@ plot(subdat$weeknb, subdat$P)
 # Positivity rate
 
 ```{r positivityRate}
+par(bg = "white", fg = "black", col.axis = "black", col.lab = "black")
 
 dat.France$posRate <- dat.France$P / dat.France$T
 dat.France$posRate7j <- sliding.window(dat.France$posRate)
 
 
-minDate <- "2020-01-01"
+plotPositivity <- function(minDate){
+  
 age <- 0
 # Subset the data
-dat <- dat.France[which(dat.France >= minDate & dat.France$cl_age90 == age), ]
+dat <- dat.France[which(dat.France$jour >= minDate & dat.France$cl_age90 == age), ]
+
+wds <- format(as.Date(dat$jour), "%w") # Weekdays
+wds[wds == 0] <- 7 # Sunday is 7
+wds <- as.numeric(wds)
+
+colsWD <- met.brewer("Signac", 7, "discrete")
 
 # Initialize plot
 par(las = 1)
 par(mar = c(5, 3, 2, 3))
+par(mgp = c(2.5, 0.5, 0), tck = -.02)
 plot(as.Date(dat$jour), dat$posRate * 100, 
      yaxs = "i", xlab = "", ylab = "", main = "Pourcentage de tests positifs", frame.plot = FALSE, 
      ylim = c(0, 1.1 * max(dat$posRate*100, na.rm = TRUE)), axes = FALSE, 
      type = "n")
-yy <- seq(0, 100, by = 5)
-axis(2, at = yy)
-axis(4, at = yy)
-xx <- seq(as.Date("2020-01-01"), as.Date("2022-12-31"), by = "month")
-axis(1, at = xx, labels = format(xx, "%b\n%Y"), cex = 0.6, padj = 0.5)
 #lines(as.Date(dat$jour), 100*dat$posRate7j, col = "#003D1B")
 # Graduations
 for(i in 0:100){
-  abline(h = i, col = gray(0.9))
+  abline(h = i, col = gray(0.925), lwd = 0.5)
 }
+for(i in seq(0, 100, by = 5)){
+  abline(h = i, col = gray(0.9), lwd = 1.5)
+}
+col7j <- gray(0.2)
+lwd7j <- 2
+  legend("topleft", col = c(colsWD, col7j), pt.bg = c(colsWD, col7j), pch = c(getPCHs(1:7), NA), legend = c("lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche", "moyenne 7 jours"), box.lwd = -1, lty = c(rep(NA, 7), 1), lwd = c(rep(NA, 7), lwd7j), cex = 0.9)
+# Axes (to cover side of legend)
+  yy <- seq(0, 100, by = 5)
+axis(2, at = yy, lwd = 0)
+axis(4, at = yy, lwd = 0)
+xx <- seq(as.Date("2020-01-01"), as.Date("2022-12-31"), by = "month")
+axis(1, at = xx, labels = format(xx, "%b\n%Y"), cex.axis = 0.9, padj = 0.5, lwd = 0, lwd.ticks = 1)
+
+# Sliding average
+lines(as.Date(dat$jour), sliding.window(dat$posRate * 100), pch = 16, cex = 0.6, col = col7j, lwd = lwd7j)
+
+lines(as.Date(dat$jour), dat$posRate * 100, pch = 16, cex = 0.6, col = gray(0.8), lwd = 1.5)
 # Add points 
-points(as.Date(dat$jour), dat$posRate * 100, pch = 16, cex = 0.6, col = "#28794B")
+points(as.Date(dat$jour), dat$posRate * 100, pch = getPCHs(dat$weekday), cex = 0.6, col = colsWD[wds], bg = colsWD[wds])
 
 # Put last point with a different color
 imax <- which(dat$jour == max(dat$jour, na.rm = TRUE))
-points(as.Date(dat[imax, ]$jour), dat[imax, ]$posRate * 100, pch = 16, cex = 1, col = "#27556B")
+#points(as.Date(dat[imax, ]$jour), dat[imax, ]$posRate * 100, pch = getPCH(dat[imax, ]$weekday), cex = 1, col = colsWD[wds[imax]], bg = colsWD[wds[imax]])
 
   mtext(paste0(
 "Données : https://www.data.gouv.fr/fr/datasets/donnees-relatives-aux-resultats-des-tests-virologiques-covid-19/#,
           (jusqu'au ", dat[imax, ]$jour, ") 
 Code : https://github.com/flodebarre/covid_indicateurs/blob/main/tauxCroissance.Rmd"), side = 1, line = 3.5, adj = 0, cex = 0.5, family = "mono")
+}
+
+plotPositivity(startDate)
 ```
 
-```{r}
+```{r plotPosivityAll, fig.width=8, fig.height=4.5}
+plotPositivity("2020-05-01")
+```
+
+```{r, eval = FALSE}
 plot(as.Date(dat$jour), dat$T)
 dat[which(dat$jour == max(dat$jour, na.rm = TRUE)), ]
 ```
