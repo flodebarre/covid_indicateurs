@@ -1,0 +1,93 @@
+---
+title: "R Notebook"
+output: html_notebook
+editor_options: 
+  chunk_output_type: console
+---
+
+Source <https://drees.shinyapps.io/delais_test_app/>
+(Dataset was manually downloaded)
+
+```{r}
+library(readxl)
+
+library(MetBrewer)
+
+source("usefulFunctions.R")
+```
+
+```{r}
+# Define legend for weekdays
+getPCH <- function(wkday){
+  switch(wkday, 
+         "1" = 21, 
+         "2" = 22, 
+         "3" = 23, 
+         "4" = 21, 
+         "5" = 22, 
+         "6" = 24, 
+         "7" = 25)
+}
+getPCHs <- function(weekdays){
+  vapply(weekdays, getPCH, FUN.VALUE = 1)
+}
+
+getCex <- function(wkday){
+  cex1 <- 1.75
+  cex2 <- 0.8*cex1
+  switch(wkday, 
+         "1" = cex1, 
+         "2" = cex1, 
+         "3" = cex1, 
+         "4" = cex2, 
+         "5" = cex2, 
+         "6" = cex2, 
+         "7" = cex2)
+}
+getCexs <- function(weekdays){
+  vapply(weekdays, getCex, FUN.VALUE = 1)
+}
+
+colsWD <- met.brewer("Signac", 7, "discrete")
+col7j <- gray(0.2)
+lwd7j <- 2
+```
+
+```{r}
+dat <- as.data.frame(read_excel("data/data-2022-04-14.xlsx", sheet = 2))
+head(dat)
+
+dat$date <- as.Date(dat$date)
+
+
+plot(dat$date, dat$nb_tests_auto, ylim = c(0, max(dat$nb_tot_PNIX_pcr_tag, na.rm = TRUE)))
+points(dat$date, dat$nb_tot_PNIX_pcr_tag, col = 2)
+
+
+
+points(dat$date, dat$nb_tot_PNIX_tag, col = 4)
+
+dat$weekday <- as.numeric(format(dat$date, "%u"))
+par(las = 1)
+par(mar = c(3, 3, 2, 1))
+plot(dat$date, dat$nb_tot_PNIX_tag / dat$nb_tot_PNIX_pcr_tag, ylim = c(0, 1), main = "Proportion de tests antigéniques parmi tous les tests", xlim = c(as.Date("2021-11-01"), Sys.Date()), 
+     col = colsWD[dat$weekday], pch = getPCHs(dat$weekday), bg = colsWD[dat$weekday], axes = FALSE)
+
+lines(dat$date, sliding.window(dat$nb_tot_PNIX_tag / dat$nb_tot_PNIX_pcr_tag), col = col7j, lwd = lwd7j)
+
+testsPayants <- as.Date("2021-10-15")
+abline(v = testsPayants)
+text(x = testsPayants, y = 1, adj = 0, " Tests payants
+ pour non vaxx")
+
+  legend("topleft", col = c(colsWD, col7j), pt.bg = c(colsWD, col7j), pch = c(getPCHs(1:7), NA), legend = c("lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche", "moyenne 7 jours"), box.lwd = -1, lty = c(rep(NA, 7), 1), lwd = c(rep(NA, 7), lwd7j), cex = 0.9)
+  
+  mnth <- seq(as.Date("2020-01-01"), Sys.Date(), by = "month")
+axis(1, at = mnth, labels = format(mnth, "%b\n%Y"), pos = 0, hadj = 0.5, padj = 0.5)
+axis(2)
+
+  mtext(paste0(
+"Données : https://drees.shinyapps.io/delais_test_app/ 
+Code : https://github.com/flodebarre/covid_indicateurs/blob/main/tauxCroissance.Rmd"), side = 1, line = 3.5, adj = 0, cex = 0.5, family = "mono")
+```
+
