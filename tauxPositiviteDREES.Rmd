@@ -1,0 +1,239 @@
+---
+title: "R Notebook"
+output:   
+  html_document:
+    self_contained: false
+editor_options: 
+  chunk_output_type: console
+---
+
+Source 
+<https://data.drees.solidarites-sante.gouv.fr/explore/embed/dataset/covid-19-resultats-issus-des-appariements-entre-si-vic-si-dep-et-vac-si>
+
+```{r}
+source("plot_legend-weekdays.R")
+source("usefulFunctions.R")
+
+library(readxl)
+```
+
+# Load data
+
+```{r}
+dlData <- FALSE
+
+URL <- "https://data.drees.solidarites-sante.gouv.fr/explore/dataset/covid-19-resultats-issus-des-appariements-entre-si-vic-si-dep-et-vac-si/download/?format=csv&timezone=Europe/Berlin&lang=fr&use_labels_for_header=true&csv_separator=%3B"
+
+fname <- "pics/dataDREESFra.csv"
+if(dlData){
+  download.file(URL, fname)
+  system(paste0("git add ", fname))
+  system("git commit -m 'update DREES dataset'")
+}
+
+dataDREES <- read.csv(fname, sep = ";")
+head(dataDREES)
+
+dataDREES$date <- as.Date(dataDREES$date)
+
+# Group all the data for a given day
+aggDREES <- aggregate(dataDREES[, -c(1, 2)], FUN = sum, by = list(date = dataDREES$date))
+
+aggDREES$weekday <- as.numeric(format(aggDREES$date, "%u"))
+
+# Positivity rate
+aggDREES$posRate <- aggDREES$nb_PCR. / aggDREES$nb_PCR
+aggDREES$posRateSymp <- aggDREES$nb_PCR._sympt / aggDREES$nb_PCR_sympt
+
+head(aggDREES)
+```
+
+## TAG data
+
+Source <https://drees.shinyapps.io/delais_test_app/>
+
+```{r}
+datTAG <- as.data.frame(read_excel("data/data-2022-04-21.xlsx", sheet = 2))
+tail(datTAG) # Check last date
+
+datTAG$date <- as.Date(datTAG$date)
+
+```
+
+## SPF data
+
+```{r}
+URL <- "https://www.data.gouv.fr/fr/datasets/r/dd0de5d9-b5a5-4503-930a-7b08dc0adc7c"
+
+dataFile <- paste0("data/FranceCas.csv") # name file with today's date
+if(dlData){
+  download.file(URL, dataFile) # download file
+}
+
+dat.France <- read.csv(dataFile, sep = ";", stringsAsFactors = FALSE)
+dat.France$date <- as.Date(dat.France$jour)
+# Keep only all ages
+dat.France <- dat.France[dat.France$cl_age90 == 0, ]
+
+```
+
+## Merge datasets
+
+```{r}
+tail(datTAG)
+tail(aggDREES)
+
+m <- merge(aggDREES, datTAG, by = "date", all = TRUE)
+tail(m)
+data.all <- merge(m, dat.France, by = "date", all = TRUE)
+tail(data.all)
+
+data.all$weekday <- as.numeric(format(data.all$date, "%u"))
+
+```
+
+
+
+# Comparison of the datasets
+
+```{r}
+tail(data.all)
+
+
+par(mar = c(4, 4, 3, 2))
+plot(data.all$nb_PCR, data.all$T)
+abline(a = 0, b = 1)
+
+V1 <- data.all$nb_PCR
+V2 <- data.all$nb_tot_PNIX_pcr_tag - data.all$nb_tot_PNIX_tag
+plot(V1, V2, 
+     col = colsWD[data.all$weekday], pch = getPCHs(data.all$weekday), bg = colsWD[data.all$weekday], 
+     xaxs = "i", yaxs = "i", 
+     xlim = c(0, max(c(V2, V1), na.rm = TRUE)), 
+     ylim = c(0, max(c(V2, V1), na.rm = TRUE)),
+     xlab = "Nombre de tests PCR, données appariements",
+     ylab = "Nombre de tests PCR, données tests & TAG"
+     )
+abline(a = 0, b = 1)
+
+
+V3 <- data.all$T
+V4 <- data.all$nb_tot_PNIX_pcr_tag
+plot(V3, V4, 
+     col = colsWD[data.all$weekday], pch = getPCHs(data.all$weekday), bg = colsWD[data.all$weekday], 
+     xaxs = "i", yaxs = "i", 
+     xlim = c(0, max(c(V3, V4), na.rm = TRUE)), 
+     ylim = c(0, max(c(V3, V4), na.rm = TRUE)),
+     xlab = "Nombre de tests totaux, données SPF",
+     ylab = "Nombre de tests totaux, données tests & TAG"
+     )
+abline(a = 0, b = 1)
+
+plot(data.all$date, V3, pch = getPCHs(data.all$weekday), xlim = c(as.Date("2021-11-01"), Sys.Date()))
+points(data.all$date, V4, pch = getPCHs(data.all$weekday), col = 2)
+
+plot(data.all$date, V1, pch = getPCHs(data.all$weekday), xlim = c(as.Date("2021-11-01"), Sys.Date()))
+points(data.all$date, V2, pch = getPCHs(data.all$weekday), col = 2)
+
+
+```
+
+
+# Plot positivity rate
+
+```{r}
+plotTaux <- function(dates, tauxPos, weekdays, ymax = 40, minDate = "2021-11-01"){
+  par(las = 1)
+  par(mar = c(3, 3, 2, 3))
+  par(mgp = c(2.5, 0.5, 0), tck = -.02)
+  
+  
+  plot(dates, tauxPos, ylim = c(0, ymax), xlim = c(as.Date(minDate), Sys.Date()), 
+       axes = FALSE, xlab = "", ylab = "", type = "n")
+  
+  for(i in 0:100){
+    abline(h = i, col = gray(0.925), lwd = 0.5)
+  }
+  for(i in seq(0, 100, by = 5)){
+    abline(h = i, col = gray(0.9), lwd = 1.5)
+  }
+  
+  yy <- seq(0, 100, by = 5)
+  axis(2, at = yy, lwd = 0)
+  axis(4, at = yy, lwd = 0)
+  xx <- seq(as.Date("2020-01-01"), as.Date("2022-12-31"), by = "month")
+  axis(1, at = xx, labels = format(xx, "%b\n%Y"), cex.axis = 0.9, padj = 0.5, lwd = 0, lwd.ticks = 1, pos = 0)
+  
+  
+  lines(dates, sliding.window(tauxPos), cex = 0.6, col = col7j, lwd = lwd7j)
+  
+  # Join points
+  lines(dates, tauxPos, 
+        cex = 0.6, col = gray(0.8), lwd = 1.5)
+  
+  points(dates, tauxPos,  
+         col = colsWD[weekdays], pch = getPCHs(weekdays), bg = colsWD[weekdays])
+  
+  
+    legend("topleft", col = c(colsWD, col7j), pt.bg = c(colsWD, col7j), pch = c(getPCHs(1:7), NA), legend = c("lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche", "moyenne 7 jours"), box.lwd = -1, lty = c(rep(NA, 7), 1), lwd = c(rep(NA, 7), lwd7j), cex = 1)
+}
+```
+
+
+```{r posRatePCR}
+plotTaux(dates = aggDREES$date, 
+         tauxPos = 100*aggDREES$posRate, 
+         weekdays = aggDREES$weekday)
+
+title(main = "Taux de positivité des tests PCR")
+  
+mtext(paste0(
+    "Données : https://data.drees.solidarites-sante.gouv.fr/explore/embed/dataset/
+          covid-19-resultats-issus-des-appariements-entre-si-vic-si-dep-et-vac-si
+Code : https://github.com/flodebarre/covid_indicateurs/blob/main/tauxPositiviteDREES.Rmd"), side = 1, line = 2, adj = 0, cex = 0.5, family = "mono", col = gray(0.5))
+```
+
+
+```{r posRatePCR_long}
+###----
+plotTaux(dates = aggDREES$date, 
+         tauxPos = 100*aggDREES$posRateSymp, 
+         weekdays = aggDREES$weekday, ymax = 80, minDate = "2021-06-01")
+
+title(main = "Taux de positivité des tests PCR parmi les personnes symptomatiques")
+  
+mtext(paste0(
+    "Données : https://data.drees.solidarites-sante.gouv.fr/explore/embed/dataset/covid-19-resultats-issus-des-appariements-entre-si-vic-si-dep-et-vac-si
+Code : https://github.com/flodebarre/covid_indicateurs/blob/main/tauxPositiviteDREES.Rmd"), side = 1, line = 2, adj = 0, cex = 0.5, family = "mono", col = gray(0.5))
+
+
+```
+
+## Proportion TAGs
+
+```{r plotPropTAG}
+par(las = 1)
+par(mar = c(3, 3, 2, 1))
+par(mgp = c(2.5, 0.5, 0), tck = -.02)
+plot(datTAG$date, datTAG$nb_tot_PNIX_tag / datTAG$nb_tot_PNIX_pcr_tag, ylim = c(0, 1), main = "Proportion de tests antigéniques parmi tous les tests", xlim = c(as.Date("2021-07-01"), Sys.Date()), 
+     col = colsWD[datTAG$weekday], pch = getPCHs(datTAG$weekday), bg = colsWD[datTAG$weekday], axes = FALSE, xlab = "", ylab = "")
+
+lines(datTAG$date, sliding.window(datTAG$nb_tot_PNIX_tag / datTAG$nb_tot_PNIX_pcr_tag), col = col7j, lwd = lwd7j)
+
+testsPayants <- as.Date("2021-10-15")
+abline(v = testsPayants)
+text(x = testsPayants, y = 1, adj = 0, " Tests payants
+ pour non vaxx")
+
+  legend("topleft", col = c(colsWD, col7j), pt.bg = c(colsWD, col7j), pch = c(getPCHs(1:7), NA), legend = c("lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche", "moyenne 7 jours"), box.lwd = -1, lty = c(rep(NA, 7), 1), lwd = c(rep(NA, 7), lwd7j), cex = 0.75, bty = "n")
+  
+  mnth <- seq(as.Date("2020-01-01"), Sys.Date(), by = "month")
+axis(1, at = mnth, labels = format(mnth, "%b\n%Y"), pos = 0, hadj = 0.5, padj = 0.5)
+axis(2)
+
+  mtext(paste0(
+"Données : https://drees.shinyapps.io/delais_test_app/ 
+Code : https://github.com/flodebarre/covid_indicateurs/blob/main/TAG.Rmd"), side = 1, line = 2, adj = 0, cex = 0.5, family = "mono", col = gray(0.5))
+```
+
+
