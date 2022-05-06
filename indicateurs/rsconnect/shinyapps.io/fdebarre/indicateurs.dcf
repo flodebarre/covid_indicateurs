@@ -1,0 +1,13 @@
+name: indicateurs
+title: indicateurs
+username:
+account: fdebarre
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 6054956
+bundleId: 5874807
+url: https://fdebarre.shinyapps.io/indicateurs/
+when: 1651782444.34714
+lastSyncTime: 1651782444.34715
+asMultiple: FALSE
+asStatic: FALSE
