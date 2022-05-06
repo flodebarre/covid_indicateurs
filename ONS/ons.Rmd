@@ -1,0 +1,265 @@
+---
+title: "ONS and case data"
+output: html_notebook
+editor_options: 
+  chunk_output_type: console
+---
+
+# Load data
+
+## ONS
+
+Source: <https://www.ons.gov.uk/peoplepopulationandcommunity/healthandsocialcare/conditionsanddiseases/datasets/coronaviruscovid19infectionsurveydata>  
+`.xlsx` files were manually downloaded and put into a `data/` folder. 
+
+```{r}
+library("readxl")
+
+# List the files
+# (names changes)
+files2021 <- system("ls data/covid*.xlsx", intern = TRUE)
+files2022 <- system("ls data/2022*.xlsx", intern = TRUE)
+files <- c(files2021, files2022)
+
+# Reformat date column
+oD <- as.Date("1899-12-30") # Origin in Excel
+reformatDate <- function(v, origin = "1970-01-01"){
+  # v vector of dates from Excel, as characters
+  out <- as.Date(as.numeric(v) + as.Date(oD))
+  return(out)
+}
+
+# Names of the columns that we will use
+namescols <- c("percent_pos", "percent_pos_lower95CI", "percent_pos_upper95CI", 
+               "number_pos", "number_pos_lower95CI", "number_pos_upper95CI")
+
+# Function to load and format the data in a given file 
+loadData <- function(f){
+  # f is the file name (relative path)
+  
+  # Read the excel file
+  dat <- as.data.frame(read_xlsx(f, sheet = "1b", skip = 4))
+
+  keep <- which(nchar(dat[, 1]) == 5)
+  if(length(keep) == 0){
+    ni <- min(c(which(substr(dat[, 1], 1, 6) == "Source"),  which(is.na(dat[1:nrow(dat), 1]))))
+    keep <- 1:(ni - 1)
+  }
+  # Remove the end lines (which are notes) and columns that we won't use
+  dat <- dat[keep, 1:7]
+  
+  # Reformat date
+  dat$date <- reformatDate(dat$Date)
+  # Remove first column, which contained the dates we will not use
+  dat <- dat[, -1]
+  
+  # Rename columns
+  names(dat)[1:6] <- namescols
+  
+  # Add information about the first date
+  dat$firstDate <- dat$date[1]
+  
+  # Return result
+  return(dat)
+}
+
+# Load all datasets
+dats <- lapply(files, loadData)
+
+# Merge into a single dataset
+alldata <- do.call(rbind, dats)
+
+# Checks
+table(alldata$firstDate)
+table(alldata$date)
+
+# Sort by first date
+alldata <- alldata[order(alldata$firstDate), ]
+
+# A plot to check the data
+plot(alldata$date, alldata$percent_pos, col = alldata$firstDate)
+```
+
+## ONS Historic values
+
+```{r}
+# Load historic values
+
+# Latest file
+ff <- "data/20220429covid19infectionsurveydatasetsengland.xlsx"
+# Load the sheet with historic estimates
+datend <- as.data.frame(read_xlsx(ff, sheet = "1a", skip = 4))
+head(datend)
+
+# Remove empty lines
+datend <- datend[c(2:10, 12:106), ]
+# Extract dates of the period
+
+dates <- strsplit(datend$`Time period`, split = " to ")
+dates <- matrix(unlist(dates), byrow = TRUE, ncol = 2)
+datend$period_begin <- dates[, 1]
+datend$period_end <- dates[, 2]
+# Compute midpoint value 
+# (two steps because mean does not work for dates)
+datend$difftime <- as.Date(datend$period_end, format = "%d %B %Y") - as.Date(datend$period_begin, format = "%d %B %Y")
+datend$midpoint <- as.Date(datend$period_begin, format = "%d %B %Y") + datend$difftime / 2
+
+ 
+head(datend)
+# Rename the columns that we use
+names(datend)[2:7] <- namescols
+
+```
+
+## Cases, UK dashboard
+
+Source: <https://coronavirus.data.gov.uk/details/download>   
+
+```{r, eval = FALSE}
+# Had to be done only once
+download.file("https://api.coronavirus.data.gov.uk/v2/data?areaType=nation&areaCode=E92000001&metric=newCasesBySpecimenDate&format=csv", "data/casesEngland.csv")
+```
+
+```{r}
+datEn <- read.csv("data/casesEngland.csv")
+
+datEn$date <- as.Date(datEn$date)
+```
+
+
+# Plot
+
+## ONS over time
+
+```{r}
+# Get values of first dates
+fDs <- sort(unique(alldata$firstDate))
+
+# Define color palette
+library(MetBrewer)
+pal0 <- met.brewer("Egypt", n = 4)
+pal <- rep(pal0, length(fDs))
+
+
+plotPercent <- function(n = length(fDs), cl = "percent"){
+  # n is the position of the final element
+  
+  colname <- paste0(cl, "_pos")
+  ylb <- ifelse(cl == "percent", "Percent", "Number")
+  
+  # Initialize plot 
+  plot(0, type = "n", 
+       xlim = range(alldata$date, na.rm = TRUE), 
+       ylim = c(0, max(alldata[, colname])), axes = FALSE, 
+       xlab = "", ylab = paste0(ylb, " positive"))
+  mnths <- seq(as.Date("2021-01-01"), Sys.Date(), by = "month")
+  axis(1, at = mnths, labels = format(mnths, "%b\n%Y"), padj = 0.5, 
+       pos = 0)
+  axis(2, las = 1)
+  
+  i <- 1 # Counter for colors
+  
+  for(fd in fDs[1:n]){
+    # Subset of the data for this first date
+    sub <- alldata[which(alldata$firstDate == fd), ]
+    
+    # Plot modelled %
+    points(sub$date, sub[, colname], col = pal[i], type = "l", lwd = 2)
+    
+    # Add CI as polygon
+    xx <- sub$date
+    polygon(x = c(xx, rev(xx), xx[1]), 
+            y = c(sub[, paste0(colname, "_upper95CI")], rev(sub[, paste0(colname, "_lower95CI")]), sub[1, paste0(colname, "_upper95CI")]), 
+            col = adjustcolor(pal[i], 0.3), border = adjustcolor(pal[i], 0.4))
+    
+    i <- i + 1 # update counter
+    
+    #  readline("press enter to continue")
+  }
+  
+  # Credits
+  mtext(side = 1, text = "ONS data, https://www.ons.gov.uk/peoplepopulationandcommunity/healthandsocialcare/
+      conditionsanddiseases/datasets/coronaviruscovid19infectionsurveydata
+Code: https://github.com/flodebarre/covid_indicateurs/blob/main/ONS/", family = "mono", col = gray(0.4), cex = 0.6, line = 3.5, adj = 0, padj = 0)
+  #points(as.Date(datend$midpoint), datend$percent_pos)
+  
+  title(paste0("Modelled ", cl," testing positive for COVID-19
+ONS surveys, England"))
+  
+}
+
+plotPercent()
+plotPercent(cl = "number")
+```
+
+```{r}
+for(cl in c("percent", "number")){
+  system(paste0("rm pics/ONS", cl, "_*"))
+  
+  # Plot all figs, save them
+  for(i in 1:length(fDs)){
+    fname <- paste0("pics/", "ONS", cl, "_", sprintf("%03d", i), ".png")
+    png(fname, 
+        width = 6, height = 8, units = "in", res = 300)
+    plotPercent(i, cl = cl)
+    dev.off()
+  }
+  
+  # Copy the last one to freeze the video
+  for(j in 1:10){
+    system(paste0("cp pics/ONS", cl, "_", sprintf("%03d", i), ".png", " pics/ONS", cl, "_", sprintf("%03d", i), "_", j, ".png"))
+  }
+  
+  # Convert into gif
+  #system("convert -quality 100% -delay 0.3 -loop 0 pics/ONSpercent_*.png pics/animationONS.gif")
+  
+  system(paste0("rm pics/ONS", cl, ".mp4"))
+  system(paste0("ffmpeg -pattern_type glob -i 'pics/ONS", cl, "_*.png' -vcodec libx264 -s 600x800 -pix_fmt yuv420p -filter:v 'setpts=15*PTS' pics/ONS", cl, ".mp4"))
+  
+}
+
+```
+
+## ONS vs cases
+
+```{r}
+source("../usefulFunctions.R")
+```
+
+```{r}
+plotPercent()
+
+points(datEn$date, sliding.window(datEn$newCasesBySpecimenDate / (56*10^6) * 100)*20, type = "l")
+points(datEn$date, sliding.window(datEn$newCasesBySpecimenDate / (56*10^6) * 100, winwdt = 14, pos = 6, FUN = sum)*1.75, type = "l")
+
+points(as.Date(datend$midpoint), datend$percent_pos, type = "l")
+```
+
+# Reformat ONS
+
+```{r}
+dates <- sort(unique(alldata$date))
+newdat <- data.frame(date = dates)
+for(col in namescols){
+  newdat[, col] <- NA
+}
+
+# We keep only the values calculated at the latest date
+for(t in dates){
+  sub <- alldata[which(alldata$date == t), ]
+  j <- which(sub$firstDate == max(sub$firstDate, na.rm = TRUE))
+  newdat[which(newdat$date == t), namescols] <- sub[j, namescols]
+}
+
+colONS <- pal[3]
+plot(newdat$date, newdat$percent_pos, type = "l", col = colONS, lwd = 2)
+polygon(c(newdat$date, rev(newdat$date), newdat$date[1]), 
+        c(newdat$percent_pos_upper95CI, rev(newdat$percent_pos_lower95CI), newdat$percent_pos_upper95CI[1]), col = adjustcolor(colONS, 0.4), border = NA)
+
+dat2 <- merge(newdat, datEn, by = "date", all.x = TRUE)
+
+head(dat2)
+
+plot(dat2$date, dat2$percent_pos / sliding.window(dat2$newCasesBySpecimenDate / (56*10^6) * 100, FUN = sum, winwdt = 14, pos = 5))
+```
+
