@@ -14,17 +14,26 @@ ui <- fluidPage(
 
     # Application title
     titlePanel("Covid-19"),
+    
+    HTML("<p>La figure est mise à jour automatiquement à partir des <a href = 'https://www.data.gouv.fr/fr/datasets/synthese-des-indicateurs-de-suivi-de-lepidemie-covid-19/'>données</a> rendues publiques par Santé Publique France (ces données sont publiées quotidiennement vers 19h). Le code de l'appli est aussi <a href = 'https://github.com/flodebarre/covid_indicateurs/blob/main/indicateurs/app.R'>en ligne</a>.<br/>
+    Ce <a href = 'https://twitter.com/flodebarre/status/1508740505827516418?s=20&t=V8CO_z3yROCC3S7m1X6xTg'> fil Twitter </a> indique comment lire la figure. <br/>
+         NB : Comme les données sont téléchargées à chaque ouverture de cette page web, l'affichage de la figure prend quelques secondes.<br/></p>"),
+    
 
     # Sidebar with a slider input for number of bins 
     sidebarLayout(
         sidebarPanel(
-
+            
             sliderInput("minDate",
                         "Date de début",
                         min = as.Date("2020-05-01","%Y-%m-%d"),
                         max = Sys.Date() - 30,
                         value = as.Date("2022-01-01"),
-                        timeFormat="%Y-%m-%d")
+                        timeFormat="%Y-%m-%d"), 
+            
+            radioButtons("lang", "", choices = list("FR", "EN"), selected = "FR", inline = TRUE)
+            
+            
         ),
 
         # Show a plot of the generated distribution
@@ -108,25 +117,25 @@ server <- function(input, output) {
     
     # Define data frame to prepare the horizontal lines of doubling times
     doublings <- data.frame(times = c(1, 2, 4, 10/7, 5/7),
-                            namesFR = c("1 semaine", "2 semaines", "4 semaines", "10 jours", "5 jours"))
+                            namesFR = c("1 semaine", "2 semaines", "4 semaines", "10 jours", "5 jours"), namesEN = c("1 week", "2 weeks", "4 weeks", "10 days", "5 days"))
     
     minDate <- reactive(input$minDate) # minimum date in the plot
     maxDate <- max(dat$date) # max date in the plot
     ylm <- c(0.5, 3) # y range
-    lang <- "FR" # Language (EN is work in progress)
-    
+#    lang() <- "FR" # lang()uage (EN is work in progress)
+    lang <- reactive(input$lang) # lang()uage
 
     ####
     output$ratioPlot <- renderPlot({
         
     par(mgp = c(2.5, 0.5, 0.5), las = 1, 
-        mar = c(3, 4, 3, 5), 
+        mar = c(3, 3, 3, 3), 
         cex = 1)
     # Initialize plot figure
     plot(dat$date, dat$ratio7_dateTest, pch = 16, xlim = c(minDate(), maxDate), ylim = ylm, log = "y", type = "n", axes = FALSE, xlab = "", ylab = "")
     
     # Axes labels
-    txt <- ifelse(lang == "FR", 
+    txt <- ifelse(lang() == "FR", 
                   "cas(j)/cas(j-7), échelle log", 
                   "cases(j)/cases(j-7), log scale")
     mtext(txt, side = 2, line = 2, las = 3)
@@ -154,7 +163,7 @@ server <- function(input, output) {
     colline <- "white" # Line color
     lwdd <- 1.5 # Line width
     dxx <- 1 # offset for labels
-    cexx <- 1/1.2
+    cexx <- 1/1.5 # font size of the margin annotations
     for(tt in doublings$times){
         # Horizontal lines for x and / doubling/halving times
         abline(h = exp(log(2) / tt), col = colline, lwd = lwdd)
@@ -162,27 +171,27 @@ server <- function(input, output) {
         
         # Add text legend
         par(xpd = TRUE)
-        text(limPlot[2] + dxx, y = exp(log(2) / tt), labels = doublings[doublings$times == tt, "namesFR"], col = colCroiss, adj = 0, cex = cexx)
+        text(limPlot[2] + dxx, y = exp(log(2) / tt), labels = doublings[doublings$times == tt, paste0("names", lang())], col = colCroiss, adj = 0, cex = cexx)
         if(tt >= 1){
-            text(limPlot[2] + dxx, y = exp(- log(2) / tt), labels = doublings[doublings$times == tt, "namesFR"], col = colDecroiss, adj = 0, cex = cexx)
+            text(limPlot[2] + dxx, y = exp(- log(2) / tt), labels = doublings[doublings$times == tt, paste0("names", lang())], col = colDecroiss, adj = 0, cex = cexx)
         }
         par(xpd = FALSE)
     }
     
     # Add titles for the two halves
     par(xpd = TRUE)
-    text(limPlot[2] + dxx, y = exp(log(2) / 8), labels = "Cas x2 en...", adj = 0, cex = 1.2 * cexx, col = colCroiss)
-    text(limPlot[2] + dxx, y = exp(- log(2) / 8), labels = "Cas /2 en...", adj = 0, cex = 1.2 * cexx, col = colDecroiss)
+    text(limPlot[2] + dxx, y = exp(log(2) / 8), labels = ifelse(lang() == "FR", "Cas x2 en", "Doubling every"), adj = 0, cex = 1.2 * cexx, col = colCroiss)
+    text(limPlot[2] + dxx, y = exp(- log(2) / 8), labels = ifelse(lang() == "FR", "Cas /2 en", "Halving every"), adj = 0, cex = 1.2 * cexx, col = colDecroiss)
     par(xpd = FALSE)
     
     # Add mention direction in shaded areas
     cexlabshade <- 0.9
     dxl <- 0.5
-    txt <- ifelse(lang == "FR", 
+    txt <- ifelse(lang() == "FR", 
                   "   Le nombre de cas décroît",
                   "   Cases decrease")
     text(as.Date((limPlot[1]+limPlot[2])/2, origin = "1970-01-01"), ylm[1], adj = c(0.5, 0 - dxl), labels = txt, col = colDecroiss, font = 1, cex = cexlabshade)
-    txt <- ifelse(lang == "FR", 
+    txt <- ifelse(lang() == "FR", 
                   "   Le nombre de cas croît",
                   "   Cases increase")
     text(as.Date((limPlot[1]+limPlot[2])/2, origin = "1970-01-01"), ylm[2], adj = c(0.5, 1 + dxl), labels = txt, col = colCroiss, font = 1, cex = cexlabshade)
@@ -233,25 +242,25 @@ server <- function(input, output) {
     legend(as.Date((limPlot[1]+limPlot[2])/2, origin = "1970-01-01"), ylm[2], horiz = TRUE, 
            pch = c(pchTest, pchRes), 
            col = c(colTest, colRes), 
-           legend = c(paste0("en date de prélèvement (jusqu'au ", format(as.Date(maxDate) - 2, format = "%d/%m/%Y"), ")"), paste0("en date de résultat (jusqu'au ", format(as.Date(maxDate), format = "%d/%m/%Y"), ")")), yjust = 0.1, xjust = 0.5, box.col = gray(0, 0), box.lwd = 0, pt.cex = 1, cex = cexx, bty = "n")
+           legend = c(paste0(ifelse(lang() == "FR", "en date de prélèvement (jusqu'au ", "by sampling date (until "), format(as.Date(maxDate) - 2, format = "%d/%m/%Y"), ")"), 
+                      paste0(ifelse(lang() == "FR", "en date de résultat (jusqu'au ", "by reporting date (until "), format(as.Date(maxDate), format = "%d/%m/%Y"), ")")), yjust = 0.1, xjust = 0.5, box.col = gray(0, 0), box.lwd = 0, pt.cex = 1, cex = cexx, bty = "n", xpd = TRUE)
     
     # Title of the plot
-    txt <- ifelse(lang == "FR", 
+    txt <- ifelse(lang() == "FR", 
                   "Ratio du nombre de cas Covid-19 détectés en France 
 d'une semaine à l'autre", 
-                  "Week-to-week ratio of the number of detected Covid-19 cases in France
-(by sampling date)")
-    mtext(paste0(txt), font = 1, cex = 1.1, line = 0.8, adj = 0.5)
+                  "Week-to-week ratio of the number of detected Covid-19 cases in France")
+    mtext(paste0(txt), font = 1, cex = 1.1, line = 1, adj = 0.5)
     
     # Credits
-    txt <- ifelse(lang == "FR", 
+    txt <- ifelse(lang() == "FR", 
                   "Inspiré des figures de @BristOliver 
 Données: https://www.data.gouv.fr/fr/datasets/synthese-des-indicateurs-de-suivi-de-lepidemie-covid-19/
-Code: https://github.com/flodebarre/covid_indicateurs/blob/main/plotRatios.R", 
+Code: https://github.com/flodebarre/covid_indicateurs/blob/main/indicateurs/app.R", 
                   "@flodebarre, Inspired by @BristOliver
 Data: https://www.data.gouv.fr/fr/datasets/synthese-des-indicateurs-de-suivi-de-lepidemie-covid-19/
 Code: https://github.com/flodebarre/covid_indicateurs/blob/main/indicateurs/app.R")
-    mtext(txt, side = 1, line = 2., adj = 0, cex = 0.5, family = "mono")
+    mtext(txt, side = 1, line = 2., adj = 0, cex = 0.5, family = "mono", col = gray(0.4))
     })
 
 }
