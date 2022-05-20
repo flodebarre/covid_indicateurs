@@ -1,0 +1,288 @@
+---
+title: "EPCI data"
+output: html_notebook
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+# Load packages
+library(MetBrewer) # Colors
+library(mapsf) # Maps
+
+```
+
+# Load data
+
+```{r}
+# Whether to download new data
+dlData <- FALSE
+```
+
+## Epi data
+
+```{r}
+# Source: https://www.data.gouv.fr/fr/datasets/donnees-de-laboratoires-pour-le-depistage-a-compter-du-18-05-2022-si-dep/
+# sp-epci-7j-cage65-opendata.csv
+URL <- "https://www.data.gouv.fr/fr/datasets/r/26d477f8-4adf-423c-9b17-f54308673c6e"
+
+destFile <- "data/casEPCI.csv"
+
+if(dlData){
+  download.file(url = URL, destfile = destFile)
+}
+
+# Load data
+datEPCI <- read.csv(destFile, sep = ";", dec = ",")
+head(datEPCI)
+
+# Clean date
+datEPCI$date1 <- as.Date(substr(datEPCI$sg, 1, 10))
+datEPCI$date <- datEPCI$dateMid <- datEPCI$date1 + 3
+datEPCI$date2 <- as.Date(substr(datEPCI$sg, 12, 21))
+
+# Dictionary for incidence rate
+tmp <- sort(unique(datEPCI$Ti))[c(1:4, 6:8, 5)]
+dicoTi <- 1:length(tmp)
+names(dicoTi) <- tmp
+
+dicoTi
+# Define the corresponding breaks
+breaksTi <- c(0, 10, 20, 50, 150, 250, 500, 1000, Inf)
+
+# Rewrite the categories
+datEPCI$Ti2 <- dicoTi[datEPCI$Ti]
+
+# Dictionary for positivity rate
+tmp <- sort(unique(datEPCI$Tp))
+dicoTp <- 1:length(tmp)
+names(dicoTp) <- tmp
+
+datEPCI$Tp2 <- dicoTp[datEPCI$Tp]
+
+# Vector of EPCIs
+epcis <- unique(datEPCI$epci)
+
+```
+
+```{r, eval = FALSE}
+# Explore data
+str(datEPCI)
+
+unique(datEPCI$cl_age65)
+datEPCI[1,]
+```
+
+## Map data
+
+### Mapv1: Ameli
+
+Kept for legacy, but not used: Here we are missing some EPCIs
+
+```{r simplifyMap, eval = FALSE}
+
+# Source map data 
+# https://datavaccin-covid.ameli.fr/explore/dataset/georef-france-epci/export/?disjunctive.reg_name&disjunctive.dep_name&disjunctive.epci_name
+mapEPCI <- st_read("data/georef-france-epci/georef-france-epci-millesime.shp")
+
+mapEPCI.france <- mapEPCI[as.numeric(substr(mapEPCI$reg_code, 1, 2)) >= 10, ]
+
+# Source trick
+# https://www.r-bloggers.com/2021/03/simplifying-geospatial-features-in-r-with-sf-and-rmapshaper/
+library(rmapshaper)
+mapEPCI.france_simpl <- ms_simplify(mapEPCI.france, keep = 0.005,
+                                keep_shapes = FALSE)
+
+head(mapEPCI)
+
+# Plot the base map
+mf_map(x = mapEPCI.france)
+
+mf_map(x = mapEPCI.france_simpl)
+
+save(mapEPCI.france_simpl, file = "data/georef-france-epci/metrosimpler.RData")
+```
+
+```{r eval = FALSE}
+load("data/georef-france-epci/metrosimpler.RData")
+
+mf_theme(bg = "white")
+mf_map(x = mapEPCI.france_simpl)
+
+# Plot proportional symbols
+#mf_map(x = mtq, var = "POP", type = "prop")
+# Plot a map layout
+#mf_layout(title = "Population in Martinique", 
+#          credits = "T. Giraud; Sources: INSEE & IGN, 2018")
+```
+
+### Mapv2: Banatic
+
+I downloaded EPCI shapefiles from the Ministry of Interior. They provide dataset for different years, I tried the recent ones, and found that SPF seems to use geographic data from 2019. 
+
+```{r, eval = FALSE}
+# Source https://www.banatic.interieur.gouv.fr/V5/cartographie/cartographie.php
+# Saved in data/ folder
+for(i in dev.list()) dev.off()
+
+# I checked 2022, 2021, 2020, EPCIs were missing, 
+# and we only have full data for 2019
+mapEPCI <- st_read("data/contours_epci/2019/MÇtropole/epcicom2019_region.shp")
+mapEPCI.france <- mapEPCI[as.numeric(mapEPCI$CODE_REG) >= 10, ]
+
+# Simplify shapes to plot the result more quickly
+# Source trick
+# https://www.r-bloggers.com/2021/03/simplifying-geospatial-features-in-r-with-sf-and-rmapshaper/
+library(rmapshaper)
+mapEPCI.france_simpl <- ms_simplify(mapEPCI.france, keep = 0.005,
+                                keep_shapes = FALSE)
+
+# Plot the base map
+mf_map(x = mapEPCI.france)
+mf_map(x = mapEPCI.france_simpl)
+
+# Save the simplified map
+save(mapEPCI.france_simpl, file = "data/contours_epci/metro2019simpler.RData")
+```
+
+```{r}
+# Load simplified contours of EPCIs
+load("data/contours_epci/metro2019simpler.RData")
+```
+
+## France incidence data
+
+```{r}
+# sp-fra-7j
+URL <- "https://www.data.gouv.fr/fr/datasets/r/fd1cf717-1189-4d2a-8b4b-9ad0d2b07a5f"
+destFile <- "data/France7j.csv"
+if(dlData){
+  download.file(URL, destFile)
+}
+
+# Read data
+datFra <- read.csv(destFile, sep = ";", dec = ",")
+
+# Format date
+datFra$date1 <- as.Date(substr(datFra$sg, 1, 10))
+datFra$date <- datFra$dateMid <- datFra$date1 + 3
+
+```
+
+# Merge and plot
+
+## Positivity rate
+
+```{r}
+max(datEPCI$dateMid)
+thedate <- "2022-01-14"
+agecl <- 64
+
+# Subset of the data for this combination for date and age class
+tmp <- datEPCI[which(datEPCI$date == thedate & datEPCI$cl_age65 == agecl), ]
+# Merge with map data
+tmp2 <- merge(mapEPCI.france_simpl, tmp, by.y = "epci", by.x = "siren", all.x = TRUE)
+
+# Positivity rate
+palTp <- met.brewer("Johnson", n = length(dicoTp), "continuous", direction = -1)
+names(palTp) <- dicoTp
+
+uu <- sort(unique(tmp2$Tp2))
+mf_theme(bg = "white")
+mf_map(tmp2, var = "Tp", type = "typo", pal = palTp[uu], val_order = names(dicoTp)[uu], leg_pos = NA)
+
+mf_legend(type = "typo", pos = "bottomleft", val = rev(names(dicoTp)), pal = rev(palTp), title = "Positivity rate (%)")
+```
+
+## Incidence 
+
+```{r}
+# Categorize incidence France
+datFra$TiCat <- cut(datFra$Ti, breaks = breaksTi, right = FALSE)
+datFra$TiCatNum <- dicoTi[datFra$TiCat]
+```
+
+```{r}
+# Define color palette
+palTi <- met.brewer("Tam", n = length(dicoTi), "continuous", direction = 1)
+names(palTi) <- dicoTi
+```
+
+
+```{r}
+plotIncidence <- function(tmp2){
+  # Incidence rate
+  uu <- sort(unique(tmp2$Ti2))
+  mf_theme(bg = "white")
+  mf_map(tmp2, var = "Ti", type = "typo", pal = palTi[uu], val_order = names(dicoTi)[uu], leg_pos = NA, border = gray(1, 1), lwd = 0.001)
+  
+  mf_legend(type = "typo", pos = "bottomleft", val = rev(names(dicoTi)), pal = rev(palTi), title = "Weekly indicence \nper 100'000")
+  
+  suffix <- ifelse(agecl == 64, " (ages 00-64)", " (ages 65+)")
+  
+  dt <- unique(tmp2$date)
+  dt <- dt[!is.na(dt)]
+
+  mf_title(paste0("Weekly incidence, ", dt, suffix), bg = "white", fg = "black")
+}
+
+fnI <- paste0("pics/mapEPCI_incidence_", thedate, ".png")
+#mf_export(tmp2, file = fnI, width = 600, height = 600, res = 100)
+layout(matrix(1:2, ncol = 1), heights = c(1.5, 4))
+
+# France incidence
+
+subFra <- datFra[datFra$date <= thedate, ]
+par(mar = c(2, 4, 1, 1), mgp = c(2., 0.5, 0), tck = -0.02)
+months <- seq(as.Date("2020-01-01"), Sys.Date(), by = "month")
+plot(subFra$date, subFra$Ti, col = palTi[subFra$TiCatNum], pch = 16, axes = FALSE, 
+     xlab = "", ylab = "", xlim = c(min(dates), max(dates)))
+axis(1, at = months, labels = format(months, "%b\n%Y"), cex.axis = 0.8, padj = 0.5)
+axis(2)
+mtext("France", side = 3, adj = 0)
+
+plotIncidence(tmp2)
+#dev.off()
+#system(paste("open", fnI))
+```
+
+```{r}
+# Generate maps for all dates
+agecl <- 64
+dates <- unique(datEPCI$date)
+
+system("rm pics/mapEPCI_incidence_*")
+
+for(i in seq_along(dates)){
+  thedate <- format(as.Date(dates[i], origin = "1970-01-01"), "%Y-%m-%d")
+  print(paste(i, "/", length(dates)))
+  # Subset of the data for this combination for date and age class
+  tmp <- datEPCI[which(datEPCI$date == thedate & datEPCI$cl_age65 == agecl), ]
+  
+  tmp2 <- merge(mapEPCI.france_simpl, tmp, by.y = "epci", by.x = "siren", all.x = TRUE)
+  
+  fnI <- paste0("pics/mapEPCI_incidence_", formatC(i, width = 4, flag = 0), ".png")
+  mf_export(tmp2, file = fnI, width = 600, height = 700, res = 100)
+  
+  layout(matrix(1:2, ncol = 1), heights = c(1.5, 4))
+
+  #---
+  subFra <- datFra[datFra$date <= thedate, ]
+  par(mar = c(2, 4, 1, 1), mgp = c(1.5, 0.25, 0), tck = -0.025)
+  months <- seq(as.Date("2020-01-01"), Sys.Date(), by = "month")
+  plot(subFra$date, subFra$Ti, col = palTi[subFra$TiCatNum], pch = 16, axes = FALSE, 
+       xlab = "", ylab = "", xlim = c(min(dates), max(dates)))
+  axis(1, at = months[months<= thedate], labels = format(months[months<= thedate], "%b\n%Y"), cex.axis = 0.7, padj = 0.5)
+  axis(2, las = 1, cex.axis = 0.7)
+  mtext("France", side = 3, adj = 0)
+  #---
+  
+  plotIncidence(tmp2)
+  dev.off()
+}
+
+# Turn into video
+system("rm pics/mapEPCI_incidence.mp4")
+system(paste0("ffmpeg -pattern_type glob -i 'pics/mapEPCI_incidence_", "*", ".png' -vcodec libx264 -s 600x700 -pix_fmt yuv420p -filter:v 'setpts=2*PTS' pics/mapEPCI_incidence.mp4"))
+```
+
