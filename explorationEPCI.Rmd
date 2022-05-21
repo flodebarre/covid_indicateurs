@@ -10,6 +10,7 @@ editor_options:
 library(MetBrewer) # Colors
 library(mapsf) # Maps
 
+for(i in dev.list()) dev.off()
 ```
 
 # Load data
@@ -25,7 +26,6 @@ dlData <- FALSE
 # Source: https://www.data.gouv.fr/fr/datasets/donnees-de-laboratoires-pour-le-depistage-a-compter-du-18-05-2022-si-dep/
 # sp-epci-7j-cage65-opendata.csv
 URL <- "https://www.data.gouv.fr/fr/datasets/r/26d477f8-4adf-423c-9b17-f54308673c6e"
-
 destFile <- "data/casEPCI.csv"
 
 if(dlData){
@@ -36,29 +36,33 @@ if(dlData){
 datEPCI <- read.csv(destFile, sep = ";", dec = ",")
 head(datEPCI)
 
-# Clean date
+# Clean dates
 datEPCI$date1 <- as.Date(substr(datEPCI$sg, 1, 10))
 datEPCI$date <- datEPCI$dateMid <- datEPCI$date1 + 3
 datEPCI$date2 <- as.Date(substr(datEPCI$sg, 12, 21))
 
 # Dictionary for incidence rate
+# (Make sure the values are ordered in increasing order)
 tmp <- sort(unique(datEPCI$Ti))[c(1:4, 6:8, 5)]
 dicoTi <- 1:length(tmp)
 names(dicoTi) <- tmp
 
 dicoTi
-# Define the corresponding breaks
+# Define the corresponding breaks (check that they match)
 breaksTi <- c(0, 10, 20, 50, 150, 250, 500, 1000, Inf)
+stopifnot(length(breaksTi) == length(dicoTi) + 1)
 
-# Rewrite the categories
+# Rewrite the categories in the data
 datEPCI$Ti2 <- dicoTi[datEPCI$Ti]
+
 
 # Dictionary for positivity rate
 tmp <- sort(unique(datEPCI$Tp))
 dicoTp <- 1:length(tmp)
 names(dicoTp) <- tmp
-
+# Rewrite the categories in the data
 datEPCI$Tp2 <- dicoTp[datEPCI$Tp]
+
 
 # Vector of EPCIs
 epcis <- unique(datEPCI$epci)
@@ -80,14 +84,14 @@ datEPCI[1,]
 Kept for legacy, but not used: Here we are missing some EPCIs
 
 ```{r simplifyMap, eval = FALSE}
-
 # Source map data 
 # https://datavaccin-covid.ameli.fr/explore/dataset/georef-france-epci/export/?disjunctive.reg_name&disjunctive.dep_name&disjunctive.epci_name
 mapEPCI <- st_read("data/georef-france-epci/georef-france-epci-millesime.shp")
 
 mapEPCI.france <- mapEPCI[as.numeric(substr(mapEPCI$reg_code, 1, 2)) >= 10, ]
 
-# Source trick
+# Simplify contours
+# Source of the trick
 # https://www.r-bloggers.com/2021/03/simplifying-geospatial-features-in-r-with-sf-and-rmapshaper/
 library(rmapshaper)
 mapEPCI.france_simpl <- ms_simplify(mapEPCI.france, keep = 0.005,
@@ -104,30 +108,28 @@ save(mapEPCI.france_simpl, file = "data/georef-france-epci/metrosimpler.RData")
 ```
 
 ```{r eval = FALSE}
+# Load simplified geographic data
 load("data/georef-france-epci/metrosimpler.RData")
-
+# Plot base map
 mf_theme(bg = "white")
 mf_map(x = mapEPCI.france_simpl)
-
-# Plot proportional symbols
-#mf_map(x = mtq, var = "POP", type = "prop")
-# Plot a map layout
-#mf_layout(title = "Population in Martinique", 
-#          credits = "T. Giraud; Sources: INSEE & IGN, 2018")
 ```
 
 ### Mapv2: Banatic
 
-I downloaded EPCI shapefiles from the Ministry of Interior. They provide dataset for different years, I tried the recent ones, and found that SPF seems to use geographic data from 2019. 
+I downloaded EPCI shapefiles from the Ministry of Interior. They provide datasets for different years, 
+I tried the recent ones, and found that SPF seems to use geographic data from 2019. 
 
 ```{r, eval = FALSE}
+# eval = FALSE because we only need to do this once
+
 # Source https://www.banatic.interieur.gouv.fr/V5/cartographie/cartographie.php
-# Saved in data/ folder
-for(i in dev.list()) dev.off()
+# Downloaded manually and saved in data/ folder
 
 # I checked 2022, 2021, 2020, EPCIs were missing, 
 # and we only have full data for 2019
 mapEPCI <- st_read("data/contours_epci/2019/MÇtropole/epcicom2019_region.shp")
+# Focus on mainland France
 mapEPCI.france <- mapEPCI[as.numeric(mapEPCI$CODE_REG) >= 10, ]
 
 # Simplify shapes to plot the result more quickly
@@ -137,7 +139,7 @@ library(rmapshaper)
 mapEPCI.france_simpl <- ms_simplify(mapEPCI.france, keep = 0.005,
                                 keep_shapes = FALSE)
 
-# Plot the base map
+# Plot the base maps to check the simplification
 mf_map(x = mapEPCI.france)
 mf_map(x = mapEPCI.france_simpl)
 
@@ -153,7 +155,7 @@ load("data/contours_epci/metro2019simpler.RData")
 ## France incidence data
 
 ```{r}
-# sp-fra-7j
+# file sp-fra-7j
 URL <- "https://www.data.gouv.fr/fr/datasets/r/fd1cf717-1189-4d2a-8b4b-9ad0d2b07a5f"
 destFile <- "data/France7j.csv"
 if(dlData){
@@ -166,16 +168,16 @@ datFra <- read.csv(destFile, sep = ";", dec = ",")
 # Format date
 datFra$date1 <- as.Date(substr(datFra$sg, 1, 10))
 datFra$date <- datFra$dateMid <- datFra$date1 + 3
-
 ```
 
-# Merge and plot
+# Plot
 
 ## Positivity rate
 
 ```{r}
 max(datEPCI$dateMid)
-thedate <- "2022-01-14"
+
+thedate <- "2022-05-12"
 agecl <- 64
 
 # Subset of the data for this combination for date and age class
@@ -192,17 +194,17 @@ mf_theme(bg = "white")
 mf_map(tmp2, var = "Tp", type = "typo", pal = palTp[uu], val_order = names(dicoTp)[uu], leg_pos = NA)
 
 mf_legend(type = "typo", pos = "bottomleft", val = rev(names(dicoTp)), pal = rev(palTp), title = "Positivity rate (%)")
+
+mf_title("Positivity rate", bg = "white", fg = "black")
 ```
 
 ## Incidence 
 
 ```{r}
-# Categorize incidence France
-datFra$TiCat <- cut(datFra$Ti, breaks = breaksTi, right = FALSE)
-datFra$TiCatNum <- dicoTi[datFra$TiCat]
-```
-
-```{r}
+# Categorize incidence France with the same categories as EPCI data
+# (will be used for colors)
+datFra$TiCat <- cut(datFra$Ti, breaks = breaksTi, right = FALSE) # Categorical version
+datFra$TiCatNum <- dicoTi[datFra$TiCat] # Numerical version
 ```
 
 
@@ -211,19 +213,29 @@ datFra$TiCatNum <- dicoTi[datFra$TiCat]
 palTi <- met.brewer("Homer1", n = length(dicoTi), "continuous", direction = -1)
 names(palTi) <- dicoTi
 
-
+# Function to plot Incidence map for a given dataset
 plotIncidence <- function(tmp2){
-  # Incidence rate
-  uu <- sort(unique(tmp2$Ti2))
-  mf_theme(bg = "white")
-  mf_map(tmp2, var = "Ti", type = "typo", pal = palTi[uu], val_order = names(dicoTi)[uu], leg_pos = NA, border = gray(1, 1), lwd = 0.001)
+  # tmp2: merged dataset (epi and geo data) to be plotted
   
+  # Incidence rate
+  uu <- sort(unique(tmp2$Ti2)) # Values of incidence in these data
+  
+  # Initiate map
+  mf_theme(bg = "white")
+  
+  # Plot as typology map, selecting the colors of the values present in the data
+  mf_map(tmp2, var = "Ti", type = "typo", 
+         pal = palTi[uu], val_order = names(dicoTi)[uu], 
+         leg_pos = NA, border = gray(1, 1), lwd = 0.001)
+  
+  # Add legend
   mf_legend(type = "typo", pos = "left", val = rev(names(dicoTi)), pal = rev(palTi), title = "7-d incidence \nper 100'000", val_cex = 0.8, cex = 0.7)
   
   suffix <- ifelse(agecl == 64, " (ages 00-64)", " (ages 65+)")
   
-  dt <- unique(tmp2$date)
-  dt <- dt[!is.na(dt)]
+  # Recover date
+  dt <- unique(tmp2$date) 
+  dt <- dt[!is.na(dt)] # Sometimes there were NAs (when missing EPCIs), remove them
 
   mf_title(paste0("7-day incidence, ", dt, suffix), bg = "white", fg = "black")
   
@@ -231,17 +243,21 @@ plotIncidence <- function(tmp2){
   
 }
 
-fnI <- paste0("pics/mapEPCI_incidence_", thedate, ".png")
+
+# Plot map and epi curve
+
+fnI <- paste0("pics/mapEPCI_incidence_", thedate, ".png") # File output name
 
 export <- TRUE # Whether to export the map as png
 if(export) mf_export(tmp2, file = fnI, width = 600, height = 600, res = 100)
 
 layout(matrix(1:2, ncol = 1), heights = c(4, 1.5))
 
+# Plot map
 plotIncidence(tmp2)
 
-# France incidence
-
+# Plot epi curve, France incidence
+# Subset of the data until the `thedate` date
 subFra <- datFra[datFra$date <= thedate, ]
 par(mar = c(2, 4, 1, 1), mgp = c(2., 0.25, 0), tck = -0.02)
 months <- seq(as.Date("2020-01-01"), Sys.Date(), by = "month")
@@ -250,7 +266,6 @@ plot(subFra$date, subFra$Ti, col = palTi[subFra$TiCatNum], pch = 16, axes = FALS
 axis(1, at = months, labels = format(months, "%b\n%Y"), cex.axis = 0.8, padj = 0.5)
 axis(2, las = 1)
 mtext("France", side = 3, adj = 0)
-
 
 if(export){
   dev.off()
@@ -267,24 +282,30 @@ dates <- unique(datEPCI$date)
 system("rm pics/mapEPCI_incidence_*")
 
 for(i in seq_along(dates)){
+  # Recover the date
   thedate <- format(as.Date(dates[i], origin = "1970-01-01"), "%Y-%m-%d")
+  # Print counter
   print(paste(i, "/", length(dates)))
   # Subset of the data for this combination for date and age class
   tmp <- datEPCI[which(datEPCI$date == thedate & datEPCI$cl_age65 == agecl), ]
-  
+  # Merge with geographic data
   tmp2 <- merge(mapEPCI.france_simpl, tmp, by.y = "epci", by.x = "siren", all.x = TRUE)
   
-  fnI <- paste0("pics/mapEPCI_incidence_", formatC(i, width = 4, flag = 0), ".png")
-  mf_export(tmp2, file = fnI, width = 600, height = 600, res = 100)
+  # Initialize output file
+  fnI <- paste0("pics/mapEPCI_incidence_", formatC(i, width = 4, flag = 0), ".png") # Output name
+  mf_export(tmp2, file = fnI, width = 600, height = 600, res = 100) # Open device
   
   layout(matrix(1:2, ncol = 1), heights = c(4, 1.5))
 
+  # Plot map
   plotIncidence(tmp2)
 
+  # Plot epi data
   #---
+  # Subset of epi data until `thedate` date
   subFra <- datFra[datFra$date <= thedate, ]
   par(mar = c(2, 4, 1, 0.5), mgp = c(1.5, 0.25, 0), tck = -0.025)
-  months <- seq(as.Date("2020-01-01"), Sys.Date(), by = "month")
+  months <- seq(as.Date("2020-01-01"), Sys.Date(), by = "month") # Months for horiz axis
   plot(subFra$date, subFra$Ti, col = palTi[subFra$TiCatNum], pch = 16, axes = FALSE, 
        xlab = "", ylab = "", xlim = c(min(dates), max(dates)))
   axis(1, at = months[months <= thedate], labels = format(months[months<= thedate], "%b\n%Y"), cex.axis = 0.7, padj = 0.5)
@@ -295,7 +316,7 @@ for(i in seq_along(dates)){
   dev.off()
 }
 
-# Turn into video
+# Turn the set of png files into a video
 system("rm pics/mapEPCI_incidence.mp4")
 system(paste0("ffmpeg -pattern_type glob -i 'pics/mapEPCI_incidence_", "*", ".png' -vcodec libx264 -s 600x600 -pix_fmt yuv420p -filter:v 'setpts=2*PTS' pics/mapEPCI_incidence.mp4"))
 system("open pics/mapEPCI_incidence.mp4")
