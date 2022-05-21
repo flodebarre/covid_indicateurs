@@ -67,6 +67,10 @@ datEPCI$Tp2 <- dicoTp[datEPCI$Tp]
 # Vector of EPCIs
 epcis <- unique(datEPCI$epci)
 
+# Vector of dates
+dates <- sort(unique(datEPCI$date))
+
+
 ```
 
 ```{r, eval = FALSE}
@@ -277,7 +281,6 @@ if(export){
 ```{r}
 # Generate maps for all dates
 agecl <- 64
-dates <- unique(datEPCI$date)
 
 system("rm pics/mapEPCI_incidence_*")
 
