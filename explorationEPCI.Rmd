@@ -203,47 +203,60 @@ datFra$TiCatNum <- dicoTi[datFra$TiCat]
 ```
 
 ```{r}
-# Define color palette
-palTi <- met.brewer("Tam", n = length(dicoTi), "continuous", direction = 1)
-names(palTi) <- dicoTi
 ```
 
 
 ```{r}
+# Define color palette
+palTi <- met.brewer("Homer1", n = length(dicoTi), "continuous", direction = -1)
+names(palTi) <- dicoTi
+
+
 plotIncidence <- function(tmp2){
   # Incidence rate
   uu <- sort(unique(tmp2$Ti2))
   mf_theme(bg = "white")
   mf_map(tmp2, var = "Ti", type = "typo", pal = palTi[uu], val_order = names(dicoTi)[uu], leg_pos = NA, border = gray(1, 1), lwd = 0.001)
   
-  mf_legend(type = "typo", pos = "bottomleft", val = rev(names(dicoTi)), pal = rev(palTi), title = "Weekly indicence \nper 100'000")
+  mf_legend(type = "typo", pos = "left", val = rev(names(dicoTi)), pal = rev(palTi), title = "7-d incidence \nper 100'000", val_cex = 0.8, cex = 0.7)
   
   suffix <- ifelse(agecl == 64, " (ages 00-64)", " (ages 65+)")
   
   dt <- unique(tmp2$date)
   dt <- dt[!is.na(dt)]
 
-  mf_title(paste0("Weekly incidence, ", dt, suffix), bg = "white", fg = "black")
+  mf_title(paste0("7-day incidence, ", dt, suffix), bg = "white", fg = "black")
+  
+  mf_credits(txt = paste0("Data: https://www.data.gouv.fr/fr/datasets/donnees-de-laboratoires-pour-le-depistage-a-compter-du-18-05-2022-si-dep/\nCode: https://github.com/flodebarre/covid_indicateurs/blob/main/explorationEPCI.Rmd\nMap:  https://www.banatic.interieur.gouv.fr/V5/cartographie/cartographie.php (2019); mapsf ", packageVersion("mapsf")), cex = 0.45, font = 1)
+  
 }
 
 fnI <- paste0("pics/mapEPCI_incidence_", thedate, ".png")
-#mf_export(tmp2, file = fnI, width = 600, height = 600, res = 100)
-layout(matrix(1:2, ncol = 1), heights = c(1.5, 4))
+
+export <- TRUE # Whether to export the map as png
+if(export) mf_export(tmp2, file = fnI, width = 600, height = 600, res = 100)
+
+layout(matrix(1:2, ncol = 1), heights = c(4, 1.5))
+
+plotIncidence(tmp2)
 
 # France incidence
 
 subFra <- datFra[datFra$date <= thedate, ]
-par(mar = c(2, 4, 1, 1), mgp = c(2., 0.5, 0), tck = -0.02)
+par(mar = c(2, 4, 1, 1), mgp = c(2., 0.25, 0), tck = -0.02)
 months <- seq(as.Date("2020-01-01"), Sys.Date(), by = "month")
 plot(subFra$date, subFra$Ti, col = palTi[subFra$TiCatNum], pch = 16, axes = FALSE, 
      xlab = "", ylab = "", xlim = c(min(dates), max(dates)))
 axis(1, at = months, labels = format(months, "%b\n%Y"), cex.axis = 0.8, padj = 0.5)
-axis(2)
+axis(2, las = 1)
 mtext("France", side = 3, adj = 0)
 
-plotIncidence(tmp2)
-#dev.off()
-#system(paste("open", fnI))
+
+if(export){
+  dev.off()
+  system(paste("open", fnI))
+}
+
 ```
 
 ```{r}
@@ -262,27 +275,29 @@ for(i in seq_along(dates)){
   tmp2 <- merge(mapEPCI.france_simpl, tmp, by.y = "epci", by.x = "siren", all.x = TRUE)
   
   fnI <- paste0("pics/mapEPCI_incidence_", formatC(i, width = 4, flag = 0), ".png")
-  mf_export(tmp2, file = fnI, width = 600, height = 700, res = 100)
+  mf_export(tmp2, file = fnI, width = 600, height = 600, res = 100)
   
-  layout(matrix(1:2, ncol = 1), heights = c(1.5, 4))
+  layout(matrix(1:2, ncol = 1), heights = c(4, 1.5))
+
+  plotIncidence(tmp2)
 
   #---
   subFra <- datFra[datFra$date <= thedate, ]
-  par(mar = c(2, 4, 1, 1), mgp = c(1.5, 0.25, 0), tck = -0.025)
+  par(mar = c(2, 4, 1, 0.5), mgp = c(1.5, 0.25, 0), tck = -0.025)
   months <- seq(as.Date("2020-01-01"), Sys.Date(), by = "month")
   plot(subFra$date, subFra$Ti, col = palTi[subFra$TiCatNum], pch = 16, axes = FALSE, 
        xlab = "", ylab = "", xlim = c(min(dates), max(dates)))
-  axis(1, at = months[months<= thedate], labels = format(months[months<= thedate], "%b\n%Y"), cex.axis = 0.7, padj = 0.5)
-  axis(2, las = 1, cex.axis = 0.7)
+  axis(1, at = months[months <= thedate], labels = format(months[months<= thedate], "%b\n%Y"), cex.axis = 0.7, padj = 0.5)
+  axis(2, las = 1, cex.axis = 0.75)
   mtext("France", side = 3, adj = 0)
   #---
   
-  plotIncidence(tmp2)
   dev.off()
 }
 
 # Turn into video
 system("rm pics/mapEPCI_incidence.mp4")
-system(paste0("ffmpeg -pattern_type glob -i 'pics/mapEPCI_incidence_", "*", ".png' -vcodec libx264 -s 600x700 -pix_fmt yuv420p -filter:v 'setpts=2*PTS' pics/mapEPCI_incidence.mp4"))
+system(paste0("ffmpeg -pattern_type glob -i 'pics/mapEPCI_incidence_", "*", ".png' -vcodec libx264 -s 600x600 -pix_fmt yuv420p -filter:v 'setpts=2*PTS' pics/mapEPCI_incidence.mp4"))
+system("open pics/mapEPCI_incidence.mp4")
 ```
 
