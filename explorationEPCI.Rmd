@@ -69,8 +69,6 @@ epcis <- unique(datEPCI$epci)
 
 # Vector of dates
 dates <- sort(unique(datEPCI$date))
-
-
 ```
 
 ```{r, eval = FALSE}
@@ -121,6 +119,8 @@ mf_map(x = mapEPCI.france_simpl)
 
 ### Mapv2: Banatic
 
+#### Mailand 
+
 I downloaded EPCI shapefiles from the Ministry of Interior. They provide datasets for different years, 
 I tried the recent ones, and found that SPF seems to use geographic data from 2019. 
 
@@ -154,6 +154,68 @@ save(mapEPCI.france_simpl, file = "data/contours_epci/metro2019simpler.RData")
 ```{r}
 # Load simplified contours of EPCIs
 load("data/contours_epci/metro2019simpler.RData")
+```
+
+#### Outre-Mer
+
+```{r, eval = FALSE}
+# Only need to do this once
+
+# Common simplification factor for the maps
+simplifyFactor <- 0.05
+
+# Guadeloupe
+map.Guadeloupe <- st_read("data/contours_epci/2019/Guadeloupe/contours_epci_971_region.shp")
+
+map.Guadeloupe_simpler <- rmapshaper::ms_simplify(map.Guadeloupe, 
+                                    keep = simplifyFactor, 
+                                    keep_shapes = FALSE)
+
+mf_map(map.Guadeloupe)
+mf_map(map.Guadeloupe_simpler)
+
+# Martinique
+map.Martinique <- st_read("data/contours_epci/2019/Martinique/contours_epci_972_region.shp")
+
+map.Martinique_simpler <- rmapshaper::ms_simplify(map.Martinique, 
+                                    keep = simplifyFactor, 
+                                    keep_shapes = FALSE)
+mf_map(map.Martinique)
+mf_map(map.Martinique_simpler)
+
+# Guyane
+map.Guyane <- st_read("data/contours_epci/2019/Guyane/contours_epci_973_region.shp")
+
+map.Guyane_simpler <- rmapshaper::ms_simplify(map.Guyane, 
+                                    keep = simplifyFactor, 
+                                    keep_shapes = FALSE)
+mf_map(map.Guyane)
+mf_map(map.Guyane_simpler)
+
+# Mayotte
+map.Mayotte <- st_read("data/contours_epci/2019/Mayotte/Contour_epci_Mayotte_2016_region.shp")
+
+map.Mayotte_simpler <- rmapshaper::ms_simplify(map.Mayotte, 
+                                    keep = simplifyFactor, 
+                                    keep_shapes = FALSE)
+mf_map(map.Mayotte)
+mf_map(map.Mayotte_simpler)
+
+# Reunion
+map.Reunion <- st_read("data/contours_epci/2019/La RÇunion/contours_epci_974_region.shp")
+
+map.Reunion_simpler <- rmapshaper::ms_simplify(map.Reunion, 
+                                    keep = simplifyFactor, 
+                                    keep_shapes = FALSE)
+mf_map(map.Reunion)
+mf_map(map.Reunion_simpler)
+
+save(map.Guadeloupe_simpler, map.Martinique_simpler, map.Guyane_simpler, map.Mayotte_simpler, map.Reunion_simpler, file = "data/contours_epci/outremer2019simpler.RData")
+```
+
+```{r}
+# Load map data
+load("data/contours_epci/outremer2019simpler.RData")
 ```
 
 ## France incidence data
@@ -204,6 +266,8 @@ mf_title("Positivity rate", bg = "white", fg = "black")
 
 ## Incidence 
 
+### Mainland 
+
 ```{r}
 # Categorize incidence France with the same categories as EPCI data
 # (will be used for colors)
@@ -218,7 +282,7 @@ palTi <- met.brewer("Homer1", n = length(dicoTi), "continuous", direction = -1)
 names(palTi) <- dicoTi
 
 # Function to plot Incidence map for a given dataset
-plotIncidence <- function(tmp2){
+plotIncidence <- function(tmp2, legend = TRUE, credits = TRUE, title = TRUE, colBorder = gray(1, 1), lwdBorder = 0.001){
   # tmp2: merged dataset (epi and geo data) to be plotted
   
   # Incidence rate
@@ -230,10 +294,10 @@ plotIncidence <- function(tmp2){
   # Plot as typology map, selecting the colors of the values present in the data
   mf_map(tmp2, var = "Ti", type = "typo", 
          pal = palTi[uu], val_order = names(dicoTi)[uu], 
-         leg_pos = NA, border = gray(1, 1), lwd = 0.001)
+         leg_pos = NA, border = colBorder, lwd = lwdBorder)
   
   # Add legend
-  mf_legend(type = "typo", pos = "left", val = rev(names(dicoTi)), pal = rev(palTi), title = "7-d incidence \nper 100'000", val_cex = 0.8, cex = 0.7)
+  if(legend) mf_legend(type = "typo", pos = "left", val = rev(names(dicoTi)), pal = rev(palTi), title = "7-d incidence \nper 100'000", val_cex = 0.8, cex = 0.7)
   
   suffix <- ifelse(agecl == 64, " (ages 00-64)", " (ages 65+)")
   
@@ -241,9 +305,9 @@ plotIncidence <- function(tmp2){
   dt <- unique(tmp2$date) 
   dt <- dt[!is.na(dt)] # Sometimes there were NAs (when missing EPCIs), remove them
 
-  mf_title(paste0("7-day incidence, ", dt, suffix), bg = "white", fg = "black")
+  if(title) mf_title(paste0("7-day incidence, ", dt, suffix), bg = "white", fg = "black")
   
-  mf_credits(txt = paste0("Data: https://www.data.gouv.fr/fr/datasets/donnees-de-laboratoires-pour-le-depistage-a-compter-du-18-05-2022-si-dep/\nCode: https://github.com/flodebarre/covid_indicateurs/blob/main/explorationEPCI.Rmd\nMap:  https://www.banatic.interieur.gouv.fr/V5/cartographie/cartographie.php (2019); mapsf ", packageVersion("mapsf")), cex = 0.45, font = 1)
+  if(credits) mf_credits(txt = paste0("Data: https://www.data.gouv.fr/fr/datasets/donnees-de-laboratoires-pour-le-depistage-a-compter-du-18-05-2022-si-dep/\nCode: https://github.com/flodebarre/covid_indicateurs/blob/main/explorationEPCI.Rmd\nMap:  https://www.banatic.interieur.gouv.fr/V5/cartographie/cartographie.php (2019); mapsf ", packageVersion("mapsf")), cex = 0.45, font = 1)
   
 }
 
@@ -323,5 +387,88 @@ for(i in seq_along(dates)){
 system("rm pics/mapEPCI_incidence.mp4")
 system(paste0("ffmpeg -pattern_type glob -i 'pics/mapEPCI_incidence_", "*", ".png' -vcodec libx264 -s 600x600 -pix_fmt yuv420p -filter:v 'setpts=2*PTS' pics/mapEPCI_incidence.mp4"))
 system("open pics/mapEPCI_incidence.mp4")
+```
+
+### OutreMer
+
+```{r}
+
+thedate <- "2022-05-12"
+agecl <- 64
+
+plotOutreMer <- function(thedate = "2022-05-12", agecl = 64){
+  # Subset of the data for this combination for date and age class
+  tmp <- datEPCI[which(datEPCI$date == thedate & datEPCI$cl_age65 == agecl), ]
+  
+  layout(matrix(1:6, ncol = 2))
+
+  cB <- gray(0.7, 1) # Color borders
+  lB <- 0.5 # lwd borders
+  
+  # Guadeloupe
+  #  Merge epi and geographic data
+  tmp2 <- merge(map.Guadeloupe_simpler, tmp, by.y = "epci", by.x = "SIREN_EPCI", all.x = TRUE)
+  # Plot typology map
+  plotIncidence(tmp2, legend = FALSE, credits = FALSE, title = FALSE, colBorder = cB, lwdBorder = lB)
+  # Add title
+  mf_title("Guadeloupe", bg = "white", fg = "black")
+  
+  # Martinique
+  tmp2 <- merge(map.Martinique_simpler, tmp, by.y = "epci", by.x = "SIREN_EPCI", all.x = TRUE)
+  plotIncidence(tmp2, legend = FALSE, credits = FALSE, title = FALSE, colBorder = cB, lwdBorder = lB)
+  mf_title("Martinique", bg = "white", fg = "black")
+  
+  # Guyane
+  tmp2 <- merge(map.Guyane_simpler, tmp, by.y = "epci", by.x = "SIREN_EPCI", all.x = TRUE)
+  plotIncidence(tmp2, legend = FALSE, credits = FALSE, title = FALSE, colBorder = cB, lwdBorder = lB)
+  mf_title("Guyane", bg = "white", fg = "black")
+  
+  # Title and legend
+  mf_init(tmp2)
+  mf_legend(type = "typo", pos = "topleft", val = rev(names(dicoTi)), pal = rev(palTi), title = "7-d incidence per 100'000", val_cex = 0.8, cex = 0.8)
+  suffix <- ifelse(agecl == 64, " (ages 00-64)", " (ages 65+)")
+  mf_title(paste0("Weekly incidence, ", thedate, ", ages ", suffix), fg = "black", bg = "white")
+  mf_credits(txt = paste0("Data: https://www.data.gouv.fr/fr/datasets/donnees-de-laboratoires-pour-le-depistage-a-compter-du-18-05-2022-si-dep/\nCode: https://github.com/flodebarre/covid_indicateurs/blob/main/explorationEPCI.Rmd\nMap:  https://www.banatic.interieur.gouv.fr/V5/cartographie/cartographie.php (2019); mapsf ", packageVersion("mapsf")), cex = 0.45, font = 1)
+  
+  
+  # Mayotte
+  tmp2 <- merge(map.Mayotte_simpler, tmp, by.y = "epci", by.x = "siren", all.x = TRUE)
+  plotIncidence(tmp2, legend = FALSE, credits = FALSE, title = FALSE, colBorder = cB, lwdBorder = lB)
+  mf_title("Mayotte", bg = "white", fg = "black")
+  
+  # La Réunion 
+  tmp2 <- merge(map.Reunion_simpler, tmp, by.y = "epci", by.x = "SIREN_EPCI", all.x = TRUE)
+  plotIncidence(tmp2, legend = FALSE, credits = FALSE, title = FALSE, colBorder = cB, lwdBorder = lB)
+  mf_title("La Réunion", bg = "white", fg = "black")
+}
+
+plotOutreMer()
+```
+
+```{r}
+system("rm pics/mapEPCI-OutreMer_incidence_*")
+
+for(i in seq_along(dates)){
+  # Recover the date
+  thedate <- format(as.Date(dates[i], origin = "1970-01-01"), "%Y-%m-%d")
+  # Print counter
+  print(paste(i, "/", length(dates)))
+  
+    # Initialize output file
+  fnI <- paste0("pics/mapEPCI-OutreMer_incidence_", formatC(i, width = 4, flag = 0), ".png") # Output name
+  #png(fnI, width = 600, height = 600, res = 100)
+  mf_export(tmp2, file = fnI, width = 600, height = 600, res = 100) # Open device
+  
+  plotOutreMer(thedate = thedate, agecl = 64)
+  
+  dev.off()
+}
+
+
+# Turn the set of png files into a video
+system("rm pics/mapEPCI-OutreMer_incidence.mp4")
+system(paste0("ffmpeg -pattern_type glob -i 'pics/mapEPCI-OutreMer_incidence_", "*", ".png' -vcodec libx264 -s 600x600 -pix_fmt yuv420p -filter:v 'setpts=2*PTS' pics/mapEPCI-OutreMer_incidence.mp4"))
+system("open pics/mapEPCI-OutreMer_incidence.mp4")
+
 ```
 
