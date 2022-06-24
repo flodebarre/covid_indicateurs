@@ -137,11 +137,12 @@ frac2angle <- function(frac){
   # Transform fraction of year into an angle in radian
   - frac * 2 * pi + pi/2
 }
+
 polar2xy <- function(r, frac){
   maxval <- max(abs(r), na.rm = TRUE) # Get max value to center the plot
   theta <- frac2angle(frac) # angle value in radian, rotate clockwise
   
-  # Polar to cartesian coordinates
+  # Polar to Cartesian coordinates
   x <- r * cos(theta)
   y <- r * sin(theta)
 
@@ -424,7 +425,12 @@ if(doGif){
   
   # Copy the last one to freeze the video
   for(j in 1:10){
+    # As last frame
     system(paste0("cp pics/hospAdmin_", sprintf("%04d", nfinal), ".png", " pics/hospAdmin_", sprintf("%04d", iend), "_", j, ".png"))
+  }
+  # As first frame
+  for(j in 1:5){
+    system(paste0("cp pics/hospAdmin_", sprintf("%04d", nfinal), ".png", " pics/hospAdmin_", "0000", "_", j, ".png"))
   }
   
 
@@ -443,8 +449,11 @@ if(doGif){
 
 # Phase plot
 
+Why this animation?
+<https://twitter.com/GrahamMedley/status/1503437863622426631?s=20&t=-dWBcPx-7EHTn9s_2ofX4w>
+
 ```{r}
-#Music source "https://opengameart.org/content/sailor-waltz-with-water-effects-c64-style"
+MusicSource <- "https://opengameart.org/content/sailor-waltz-with-water-effects-c64-style"
 ```
 
 ```{r}
@@ -500,10 +509,11 @@ plotOJHosp(nrow(dat.France) - 4)
 ```{r}
 if(doGif){
   
+  system("rm pics/portraitHosp_*")
+  
   for(k in 7:(nrow(dat.France) - 4) ){
     plotOJHosp(k)
   }
-  
   
   # Copy the last one to freeze the video
   for(j in 1:20){
@@ -514,7 +524,7 @@ if(doGif){
   system("rm pics/portraitHosp.mp4")
   system("ffmpeg -pattern_type glob -i 'pics/portraitHosp_*.png' -vcodec libx264 -s 600x650 -pix_fmt yuv420p pics/portraitHosp.mp4")
  
-  
+  system("rm pics/portraitHosp_audio.mp4")
   system("ffmpeg -i pics/portraitHosp.mp4 -i data/sailor_waltz_with_water_effects_c64_style.ogg -map 0 -map 1:a -c:v copy -shortest pics/portraitHosp_audio.mp4")
   
 }
@@ -568,10 +578,10 @@ points(pxy$x[1:iend], pxy$y[1:iend], col = cols, pch = 16, cex = 0.5)
 #legend(x = "topright", col = c(col2020, col2021), pch = 16, legend = c(expression("2020", col = "blue"), "2021"), cex = 0.8, pt.cex = 0.5, bty = "n")
 
 if(lang == "FR"){
-  mtext(side = 1, text = paste0("Source des données : ", URL, "
+  mtext(side = 1, text = paste0("Source des données : ", URLsource, "
 Mise à jour : ", today, " | ", "@flodebarre"), cex = 0.75, line = 2)
 }else{
-  mtext(side = 1, text = paste0("Data : ", URL, "
+  mtext(side = 1, text = paste0("Data : ", URLsource, "
 Date : ", today, " | ", "@flodebarre"), cex = 0.75, line = 2)
 }
 
